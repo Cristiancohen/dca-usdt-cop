@@ -1,1 +1,19 @@
-name: DCA USDT-COP\non:\n  schedule:\n    - cron: '0 * * * *'\n  workflow_dispatch:\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - name: Ping Binance\n        run: |\n          echo '--- vision ---'\n          curl -s -w '\\n%{http_code}' https://data-api.binance.vision/api/v3/ping\n          echo '--- com ---'\n          curl -s -w '\\n%{http_code}' https://api.binance.com/api/v3/ping\n          echo '--- precio ---'\n          curl -s 'https://data-api.binance.vision/api/v3/ticker/price?symbol=USDTBRL'
+name: DCA USDT-COP
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Binance
+        run: |
+          echo '--- vision ---'
+          curl -s -w '
+%{http_code}' https://data-api.binance.vision/api/v3/ping
+          echo '--- com ---'
+          curl -s -w '
+%{http_code}' https://api.binance.com/api/v3/ping
+          echo '--- precio ---'
+          curl -s 'https://data-api.binance.vision/api/v3/ticker/price?symbol=USDTBRL'
