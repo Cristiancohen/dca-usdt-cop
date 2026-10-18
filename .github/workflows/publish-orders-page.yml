@@ -6,13 +6,11 @@ on:
     - cron: '*/15 * * * *'
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: orders-feed
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -32,12 +30,14 @@ jobs:
           BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
           DCA_SYMBOL: USDTCOP
         run: python orders_feed.py --output docs/orders.json
-      - name: Configurar GitHub Pages
-        uses: actions/configure-pages@v5
-      - name: Empaquetar la página
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-      - name: Publicar GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Actualizar el feed en la rama main
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet -- docs/orders.json; then
+            echo 'Sin cambios en el feed.'
+          else
+            git add docs/orders.json
+            git commit -m 'Refresh Binance bot orders feed'
+            git push origin HEAD:main
+          fi
