@@ -1,1 +1,1 @@
-
+name: DCA USDT/COP alert\non:\n  schedule:\n    - cron: '0 * * * *'\n  workflow_dispatch:\n\njobs:\n  check:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: '3.11'\n      - name: Run DCA check\n        run: python bot.py
