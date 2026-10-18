@@ -1,16 +1,1 @@
-name: DCA USDT/COP alert
-on:
-  schedule:
-    - cron: '0 * * * *'
-  workflow_dispatch:
-
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Run DCA check
-        run: python bot.py
+name: Avisos DCA USDT/COP\n\non:\n  schedule:\n    - cron: \"7 * * * *\"\n  workflow_dispatch:\n\npermissions:\n  contents: read\n\nconcurrency:\n  group: dca-usdt-cop\n  cancel-in-progress: false\n\njobs:\n  monitor:\n    name: Consultar mercado y emitir aviso (sin órdenes)\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - name: Obtener código\n        uses: actions/checkout@v4\n\n      - name: Verificar acceso a Binance data API (ping)\n        run: |\n          python - <<'PY'\n          import urllib.request\n          url = \"https://data-api.binance.vision/api/v3/ping\"\n          request = urllib.request.Request(url, headers={\"User-Agent\": \"dca-usdt-cop-alert/1.0\"})\n          try:\n              with urllib.request.urlopen(request, timeout=15) as response:\n                  body = response.read().decode(\"utf-8\")\n                  print(f\"PING {url} -> HTTP {response.status}; cuerpo: {body}\")\n                  if response.status != 200:\n                      raise SystemExit(f\"Ping falló: HTTP {response.status}\")\n          except Exception as exc:\n              print(f\"PING {url} -> ERROR {type(exc).__name__}: {exc}\")\n              raise\n          PY\n\n      - name: Ejecutar monitor DCA en modo aviso\n        env:\n          # Reservados para una futura integración. bot.py no los usa ni ejecuta órdenes.\n          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}\n          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}\n          DCA_BUY_DISCOUNT_PCT: \"1.5\"\n        run: python bot.py
