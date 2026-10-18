@@ -1,0 +1,29 @@
+name: Prueba real de orden LIMIT USDTCOP
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_live:
+        description: Escribe EJECUTAR_COMPRA_LIMIT_REAL para autorizar compra y venta LIMIT reales
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  live-limit-test:
+    if: inputs.confirm_live == 'EJECUTAR_COMPRA_LIMIT_REAL'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verificar cuenta y enviar únicamente órdenes LIMIT
+        env:
+          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
+          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
+          DCA_SYMBOL: USDTCOP
+        run: python test_order.py --live
