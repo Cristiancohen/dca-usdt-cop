@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Monitor del bot · USDT/COP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{color-scheme:light;--bg:#eef1f0;--surface:#fbfcfb;--ink:#14211e;--muted:#5b6b66;--line:#d3dbd8;--accent:#0d6b5c;--soft:#dcefea;--bad:#b3372b;--font:"Instrument Sans",system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,monospace}
+@media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1a17;--surface:#16241f;--ink:#e6efec;--muted:#94a8a1;--line:#2a3d37;--accent:#4fc3ac;--soft:#1b3a33;--bad:#f08a7e}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font);padding:26px 16px 44px}.wrap{max-width:960px;margin:auto;display:grid;gap:16px}header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}h1{font-size:clamp(25px,5vw,34px);letter-spacing:-.03em;line-height:1.15;margin:0}header p{color:var(--muted);margin:7px 0 0}.refresh{font:12px var(--mono);color:var(--muted);padding-top:6px}.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:17px;min-width:0}.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.eyebrow{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}.pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600;background:var(--soft);color:var(--accent)}.pill.error{color:var(--bad);background:transparent;border:1px solid var(--bad)}.dot{width:7px;height:7px;background:currentColor;border-radius:50%}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}.datum{border-top:1px solid var(--line);padding-top:10px;min-width:0}.datum small{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}.datum strong{font:14px/1.5 var(--mono);overflow-wrap:anywhere}.datum.wide{grid-column:1/-1}.empty{padding:23px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:8px;margin-top:14px}.section-title{margin:0 0 12px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}.request{border:1px solid var(--line);border-radius:8px;margin-top:10px;overflow:hidden}.request summary{cursor:pointer;padding:10px 12px;font:12px var(--mono);background:var(--bg);overflow-wrap:anywhere}.request-body{padding:12px}.request-body p{margin:0 0 8px;color:var(--muted);font-size:12px}.raw{margin:0;max-height:420px;overflow:auto;background:var(--bg);border-radius:6px;border:1px solid var(--line);padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 var(--mono)}.history{display:grid;gap:10px}.history-item{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:6px}.history-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.history-item time,.history-meta{font:12px var(--mono);color:var(--muted)}.history-item p{margin:0;font-size:13px}.error-text{color:var(--bad);overflow-wrap:anywhere}a{color:var(--accent)}footer{font-size:12px;color:var(--muted);padding:0 2px}@media(max-width:620px){.grid{grid-template-columns:1fr 1fr}.datum.wide{grid-column:1/-1}.card{padding:14px}}@media(max-width:380px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header><div><h1>Monitor del bot</h1><p>Órdenes manuales USDTCOP · respuestas recibidas de Binance</p></div><div class="refresh" id="refresh">Cargando bitácora…</div></header>
+<section class="card" aria-labelledby="latest-heading"><div class="topline"><h2 class="eyebrow" id="latest-heading">Última ejecución</h2><span id="latest-status" class="pill"><span class="dot"></span>Consultando</span></div><div id="latest"><div class="empty">Cargando la bitácora pública…</div></div></section>
+<section class="card"><h2 class="section-title">Histórico reciente</h2><div id="history" class="history"><div class="empty">Cargando…</div></div></section>
+<footer>Actualización automática cada 20 segundos. La vista consulta únicamente el archivo público de bitácora del repositorio; no contiene claves API ni tokens.</footer>
+</main>
+<script>
+(() => {
+  const feed = 'https://raw.githubusercontent.com/Cristiancohen/dca-usdt-cop/main/monitor/log.json';
+  const latest = document.getElementById('latest');
+  const history = document.getElementById('history');
+  const status = document.getElementById('latest-status');
+  const refresh = document.getElementById('refresh');
+  const el = (tag, text, cls) => { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (cls) node.className = cls; return node; };
+  const prettyTime = value => { if (!value) return 'No informado'; const d = new Date(value); return Number.isNaN(d.getTime()) ? value : d.toLocaleString('es-CO', {dateStyle:'medium', timeStyle:'medium'}); };
+  const renderLatest = item => {
+    latest.replaceChildren();
+    if (!item) { latest.append(el('div','Aún no hay ejecuciones registradas.','empty')); status.className='pill'; status.replaceChildren(el('span',undefined,'dot'), document.createTextNode('Sin ejecuciones')); return; }
+    const good = item.status === 'success';
+    status.className = good ? 'pill' : 'pill error';
+    status.replaceChildren(el('span',undefined,'dot'), document.createTextNode(good ? 'Orden aceptada por Binance' : 'Ejecución con error'));
+    const order = item.order_received || {};
+    const grid = el('div',undefined,'grid');
+    const add = (label,value,wide=false) => { const d=el('div',undefined,wide?'datum wide':'datum'); d.append(el('small',label),el('strong',value ?? 'No informado')); grid.append(d); };
+    add('Hora (UTC)', prettyTime(item.timestamp));
+    add('Orden recibida', `${order.lado ?? '—'} · ${order.precio ?? '—'} COP`);
+    add('Cantidad indicada', `${order.cantidad ?? '—'} USDT`);
+    const p=item.proxy||{};
+    add('Proxy usado',p.used||'Ninguno (conexión directa)');
+    add('Reintentos de proxy',Array.isArray(p.attempts)?String(p.attempts.length):'0');
+    add('Resultado final',good?`HTTP ${((item.requests||[]).slice(-1)[0]||{}).http_status ?? '—'}`:(item.error||'Error; respuesta disponible abajo'),true);
+    if (p.note) add('Nota de conexión',p.note,true);
+    latest.append(grid);
+    const requests=Array.isArray(item.requests)?item.requests:[];
+    const title=el('h3','Peticiones y respuesta cruda de Binance','section-title'); title.style.marginTop='18px'; latest.append(title);
+    if (!requests.length) latest.append(el('div','No se alcanzó a enviar una petición a Binance.','empty'));
+    requests.forEach((req,i)=>{
+      const details=el('details',''); details.className='request'; details.open=i===requests.length-1;
+      const params=req.request_params && Object.keys(req.request_params).length ? ` · ${JSON.stringify(req.request_params)}` : '';
+      details.append(el('summary',`${req.method||'GET'} ${req.endpoint||'—'} · ${req.signed?'firmada':'pública'} · HTTP ${req.http_status??'sin respuesta'}${params}`));
+      const body=el('div'); body.className='request-body';
+      body.append(el('p','Cuerpo JSON recibido (texto original):'));
+      body.append(el('pre',req.raw_response ?? req.error ?? 'Sin cuerpo de respuesta.','raw'));
+      if (req.error) body.append(el('p',`Error de conexión: ${req.error}`,'error-text'));
+      details.append(body); latest.append(details);
+    });
+    if (item.final_response) { const d=el('details'); d.className='request'; d.append(el('summary','Respuesta final del método de orden (JSON)')); d.append(el('pre',JSON.stringify(item.final_response,null,2),'raw')); latest.append(d); }
+    if (item.error) latest.append(el('p',`Error final: ${item.error}`,'error-text'));
+  };
+  const renderHistory = entries => {
+    history.replaceChildren();
+    if (!entries.length) { history.append(el('div','Aún sin ejecuciones. Cuando el workflow registre una orden, aparecerá aquí.','empty')); return; }
+    entries.forEach(item=>{
+      const card=el('article'); card.className='history-item';
+      const head=el('div'); head.className='history-head';
+      const isOk=item.status==='success'; const pill=el('span',isOk?'Aceptada':'Error',isOk?'pill':'pill error');
+      head.append(el('time',prettyTime(item.timestamp)),pill); card.append(head);
+      const o=item.order_received||{};
+      card.append(el('p',`Orden ${o.lado??'—'} · ${o.precio??'—'} COP · ${o.cantidad??'—'} USDT`));
+      const req=(item.requests||[]).slice(-1)[0]||{};
+      card.append(el('div',`Proxy: ${(item.proxy||{}).used||'ninguno'} · Binance HTTP: ${req.http_status??'sin respuesta'} · Run: ${item.run_id??'—'}`,'history-meta'));
+      if(req.raw_response) { const pre=el('pre',req.raw_response,'raw'); pre.style.maxHeight='130px'; card.append(pre); }
+      else if(item.error) card.append(el('p',item.error,'error-text'));
+      history.append(card);
+    });
+  };
+  async function load() {
+    try {
+      const response=await fetch(`${feed}?t=${Date.now()}`,{cache:'no-store'});
+      if(!response.ok) throw new Error(`HTTP ${response.status} al leer la bitácora`);
+      const data=await response.json(); const entries=Array.isArray(data.entries)?data.entries:[];
+      renderLatest(entries[0]); renderHistory(entries);
+      refresh.textContent=`Actualizado ${new Date().toLocaleTimeString('es-CO')} · próximo en 20 s`;
+    } catch(err) {
+      if(!history.childElementCount||history.textContent.includes('Cargando')) history.replaceChildren(el('div',err.message,'empty'));
+      refresh.textContent=`No se pudo actualizar: ${err.message}`;
+      if(!latest.textContent.includes('No se pudo')) latest.append(el('p',err.message,'error-text'));
+    }
+  }
+  load(); setInterval(load,20000);
+})();
+</script>
+</body>
+</html>

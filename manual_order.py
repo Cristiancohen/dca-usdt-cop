@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -118,18 +119,75 @@ def _write_summary(markdown: str) -> None:
             summary.write(markdown + "\n")
 
 
+def _redact(value: Any) -> Any:
+    """Redacta credenciales incluso si el exchange las repitiera en una respuesta."""
+    if isinstance(value, str):
+        for name in ("BINANCE_API_KEY", "BINANCE_API_SECRET", "GITHUB_TOKEN", "GH_TOKEN"):
+            secret = os.environ.get(name, "")
+            if secret:
+                value = value.replace(secret, "[REDACTADO]")
+        return value
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    if isinstance(value, dict):
+        hidden = {"signature", "apikey", "api_key", "token", "secret"}
+        return {key: "[REDACTADO]" if str(key).lower() in hidden else _redact(item)
+                for key, item in value.items()}
+    return value
+
+
+def _received_order(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    # Lista blanca: no se copia ningún campo libre del payload al feed público.
+    return _redact({key: payload.get(key) for key in ("precio", "lado", "cantidad", "timestamp")
+                     if key in payload})
+
+
+def _write_monitor_record(payload: Any, result: dict[str, Any] | None, error: Exception | None,
+                          started_at: str) -> None:
+    path = Path(os.environ.get("MONITOR_RUN_FILE", "monitor/run.json"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    event = {
+        "timestamp": started_at,
+        "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "run_id": os.environ.get("GITHUB_RUN_ID", "local"),
+        "status": "success" if result is not None else "error",
+        "order_received": _received_order(payload),
+        "proxy": {
+            "used": None,
+            "attempts": [],
+            "note": "Conexión directa del runner; no se utilizó proxy ni se intentó eludir restricciones regionales.",
+        },
+        "requests": _redact(list(trade.REQUEST_TRACE)),
+        "final_response": _redact(result.get("response")) if result else None,
+        "error": _redact(str(error)) if error is not None else None,
+    }
+    path.write_text(json.dumps(event, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
+    trade.REQUEST_TRACE.clear()
+    started_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    payload: Any = None
+    result: dict[str, Any] | None = None
+    error: Exception | None = None
     try:
         payload = json.loads(os.environ.get("MANUAL_ORDER_PAYLOAD", ""))
         result = execute_order(payload)
         _write_summary(_summary(result))
         response = result["response"]
         print(f"Orden LIMIT {result['side']} aceptada por Binance: orderId={response.get('orderId')}, estado={response.get('status')}.")
-        return 0
     except Exception as exc:
+        error = exc
         _write_summary(_error_summary(exc))
         print(f"ERROR en orden individual USDTCOP: {exc}", file=sys.stderr)
+    try:
+        _write_monitor_record(payload, result, error, started_at)
+    except OSError as exc:
+        print(f"ERROR al guardar bitácora local del monitor: {exc}", file=sys.stderr)
         return 1
+    return 0 if result is not None else 1
 
 
 if __name__ == "__main__":

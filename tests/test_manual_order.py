@@ -75,9 +75,11 @@ class ManualOrderTests(unittest.TestCase):
                  "side": "BUY", "price": Decimal("2900"), "quantity": Decimal("2"),
                  "timestamp": "2026-04-03T12:00:00+00:00", "response": {"orderId": 15, "status": "NEW"}
              }), \
-             patch("manual_order._write_summary") as summary:
+             patch("manual_order._write_summary") as summary, \
+             patch("manual_order._write_monitor_record") as monitor:
             self.assertEqual(manual_order.main(), 0)
         self.assertIn("Order ID", summary.call_args.args[0])
+        monitor.assert_called_once()
 
 
 if __name__ == "__main__":

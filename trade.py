@@ -19,6 +19,22 @@ PRIVATE_BASE_URL = os.environ.get("BINANCE_API_URL", "https://api.binance.com").
 PUBLIC_BASE_URL = os.environ.get("BINANCE_DATA_URL", "https://data-api.binance.vision").rstrip("/")
 TIMEOUT_SECONDS = 20
 
+# Estructura de auditoría de solicitudes (sin headers, timestamp firmado ni firma).
+REQUEST_TRACE: list[dict[str, Any]] = []
+_SAFE_LOG_PARAMS = {
+    "symbol", "side", "type", "timeInForce", "quantity", "price",
+    "newOrderRespType", "orderId", "limit", "interval",
+}
+
+
+def _safe_response_text(value: str) -> str:
+    """Evita que valores de credenciales presentes por error en una respuesta se publiquen."""
+    for name in ("BINANCE_API_KEY", "BINANCE_API_SECRET", "GITHUB_TOKEN", "GH_TOKEN"):
+        secret = os.environ.get(name, "")
+        if secret:
+            value = value.replace(secret, "[REDACTADO]")
+    return value
+
 
 class BinanceAPIError(RuntimeError):
     """Error de Binance, conservando literalmente su mensaje cuando está disponible."""
@@ -47,21 +63,44 @@ def _request(method: str, path: str, params: dict[str, Any] | None = None, *, si
     base = PUBLIC_BASE_URL if public else PRIVATE_BASE_URL
     url = f"{base}{path}" + (f"?{query}" if query else "")
     req = urllib.request.Request(url, method=method, headers=headers)
+    event: dict[str, Any] = {
+        "method": method,
+        "endpoint": path,
+        "signed": signed,
+        "request_params": {k: str(v) for k, v in values.items() if k in _SAFE_LOG_PARAMS},
+        "proxy": None,
+    }
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as response:
-            payload = response.read().decode("utf-8")
-            return json.loads(payload) if payload else {}
+            payload = response.read().decode("utf-8", errors="replace")
+            event["http_status"] = response.status
+            event["raw_response"] = _safe_response_text(payload)
+            try:
+                decoded = json.loads(payload) if payload else {}
+            except json.JSONDecodeError:
+                decoded = None
+            event["response_json"] = decoded
+            REQUEST_TRACE.append(event)
+            return decoded if decoded is not None else payload
     except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
+        body = _safe_response_text(exc.read().decode("utf-8", errors="replace"))
+        event["http_status"] = exc.code
+        event["raw_response"] = body
         try:
             data = json.loads(body)
+            event["response_json"] = data
             # Binance's JSON `msg` is surfaced verbatim, e.g. signature/permission errors.
             message = data.get("msg", body) if isinstance(data, dict) else body
             code = f" (código {data['code']})" if isinstance(data, dict) and "code" in data else ""
+            REQUEST_TRACE.append(event)
             raise BinanceAPIError(f"Binance HTTP {exc.code}{code}: {message}") from exc
         except (json.JSONDecodeError, UnicodeDecodeError):
+            event["response_json"] = None
+            REQUEST_TRACE.append(event)
             raise BinanceAPIError(f"Binance HTTP {exc.code}: {body}") from exc
     except urllib.error.URLError as exc:
+        event["error"] = _safe_response_text(str(exc.reason))
+        REQUEST_TRACE.append(event)
         raise BinanceAPIError(f"Error de conexión con Binance: {exc.reason}") from exc
 
 

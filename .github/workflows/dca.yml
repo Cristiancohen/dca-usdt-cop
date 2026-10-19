@@ -7,7 +7,11 @@ on:
     types: [manual-order]
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: manual-order-monitor
+  cancel-in-progress: false
 
 jobs:
   check:
@@ -31,9 +35,27 @@ jobs:
         with:
           python-version: '3.11'
       - name: Validar y enviar una orden LIMIT individual
+        id: manual-order
+        continue-on-error: true
         env:
           BINANCE_API_KEY: ${{ secrets.BINGTUSH_API_KEY || secrets.BINANCE_API_KEY }}
           BINANCE_API_SECRET: ${{ secrets.BINGTUSH_API_SECRET || secrets.BINANCE_API_SECRET }}
           DCA_SYMBOL: USDTCOP
           MANUAL_ORDER_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
         run: python manual_order.py
+      - name: Publicar bitácora sanitizada en main
+        if: always()
+        run: |
+          python publish_monitor.py --run monitor/run.json --history monitor/log.json --limit 50
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet -- monitor/log.json; then
+            echo 'La bitácora no cambió.'
+          else
+            git add monitor/log.json
+            git commit -m 'Record manual Binance order monitor run'
+            git push origin HEAD:main
+          fi
+      - name: Mantener fallo visible en el estado del job
+        if: steps.manual-order.outcome == 'failure'
+        run: exit 1
