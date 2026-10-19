@@ -7,8 +7,6 @@ on:
         description: Escribe EJECUTAR_COMPRA_LIMIT_REAL para autorizar compra y venta LIMIT reales
         required: true
         type: string
-  repository_dispatch:
-    types: [manual-order]
 
 permissions:
   contents: read
@@ -29,20 +27,3 @@ jobs:
           BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
           DCA_SYMBOL: USDTCOP
         run: python test_order.py --live
-
-  manual-order:
-    if: github.event_name == 'repository_dispatch' && github.event.action == 'manual-order'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Validar y enviar la orden LIMIT individual solicitada
-        env:
-          BINANCE_API_KEY: ${{ secrets.BINANCE_API_KEY }}
-          BINANCE_API_SECRET: ${{ secrets.BINANCE_API_SECRET }}
-          DCA_SYMBOL: USDTCOP
-          MANUAL_ORDER_PAYLOAD: ${{ toJSON(github.event.client_payload) }}
-        run: python manual_order.py

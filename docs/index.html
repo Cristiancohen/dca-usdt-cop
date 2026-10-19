@@ -286,15 +286,15 @@ footer { color: var(--muted); font-size: 13px; }
       <p>La escalera proyectada no cambia. La ejecución coloca las compras al menos 20 COP bajo el precio vivo y las ventas desde 2 COP sobre él; conserva la separación y los montos calculados. La simulación no envía órdenes.</p>
       <div class="op-modes">
         <label><input id="dca-controlled-mode" type="checkbox" checked> MODO CONTROLADO (simula, no envía)</label>
-        <label><input id="dca-real-mode" type="checkbox"> Habilitar envío REAL</label>
-        <span id="dca-mode-status" class="op-status" role="status" aria-live="polite">Modo controlado activo.</span>
+        <label><input id="dca-real-mode" type="checkbox" disabled> Envío REAL desde el navegador deshabilitado</label>
+        <span id="dca-mode-status" class="op-status" role="status" aria-live="polite">Modo controlado activo; el navegador no almacena llaves de Binance.</span>
       </div>
       <div class="op-actions">
         <button id="dca-simulate" class="primary" type="button">Simular escalera</button>
-        <button id="dca-real-send" class="primary" type="button" hidden>Enviar órdenes LIMIT reales</button>
-        <button id="dca-cancel-open" type="button">Cancelar abiertas de esta calculadora</button>
-        <button id="dca-test-connection" type="button">Probar conexión</button>
+        <button id="dca-real-send" class="primary" type="button" hidden disabled>Envío real deshabilitado</button>
+        <button id="dca-cancel-open" type="button" disabled>Cancelación desde el navegador deshabilitada</button>
       </div>
+      <p>La escalera se puede simular aquí. Para evitar guardar llaves de Binance en el navegador, el envío real de la escalera y su cancelación directa están deshabilitados; la prueba individual usa el bot de GitHub Actions.</p>
       <section class="op-individual" aria-labelledby="dca-individual-title">
         <h3 id="dca-individual-title">PRUEBA INDIVIDUAL · una orden</h3>
         <p>Independiente de la escalera. Elige lado, precio COP y cantidad USDT. Al confirmar, esta página avisa al bot de GitHub; el bot valida y envía una orden LIMIT a Binance con las llaves guardadas en Actions Secrets. El resultado queda en la pestaña Actions del repositorio.</p>
@@ -313,26 +313,17 @@ footer { color: var(--muted); font-size: 13px; }
           <button id="dca-individual-simulate" type="button">Simular orden individual</button>
           <button id="dca-individual-send" class="primary" type="button">Enviar UNA orden LIMIT al bot</button>
         </div>
-        <details>
-          <summary>Configurar Token de GitHub para la prueba individual</summary>
+        <section class="github-token-settings" aria-label="Configuración del Token de GitHub">
+          <h4>Configuración del Token de GitHub</h4>
           <div class="op-fields">
-            <label for="dca-github-token">Token de GitHub <input id="dca-github-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
-            <button id="dca-save-github-token" type="button">Guardar token en este navegador</button>
-            <button id="dca-clear-github-token" type="button">Borrar token</button>
+            <label for="dca-github-token">Token de GitHub <input id="dca-github-token" type="password" autocomplete="new-password" spellcheck="false" placeholder="ghp_…"></label>
+            <span id="dca-github-token-state" class="op-status" role="status" aria-live="polite">Comprobando almacenamiento…</span>
+            <button id="dca-save-github-token" type="button">Guardar Token de GitHub</button>
+            <button id="dca-clear-github-token" type="button">Borrar token guardado</button>
           </div>
-          <p>Crea un Fine-grained personal access token en GitHub → Settings → Developer settings → Personal access tokens, limitado al repositorio <code>Cristiancohen/dca-usdt-cop</code> y con permiso <strong>Contents: Read and write</strong> (necesario para repository_dispatch). Pega el token aquí una vez: se guarda solo en localStorage de este navegador, sin cifrar; nunca se incluye en el HTML ni en el repositorio. No uses un equipo compartido y revócalo desde GitHub si dejas de usarlo.</p>
-        </details>
+          <p>Crea un Personal Access Token (classic) en GitHub → Settings → Developer settings → Personal access tokens. Selecciona los scopes <strong>repo</strong> y <strong>workflow</strong>. Pégalo aquí una sola vez; se guarda únicamente en localStorage de este navegador, sin cifrar. El token no se incorpora al HTML, al repositorio ni al payload. No uses un equipo compartido y revócalo desde GitHub cuando ya no lo necesites.</p>
+        </section>
       </section>
-      <details>
-        <summary>Llaves de Binance en este navegador (solo escalera y cancelación)</summary>
-        <div class="op-fields">
-          <label for="dca-api-key">API Key <input id="dca-api-key" type="password" autocomplete="off" spellcheck="false"></label>
-          <label for="dca-api-secret">API Secret <input id="dca-api-secret" type="password" autocomplete="new-password" spellcheck="false"></label>
-          <button id="dca-save-keys" type="button">Guardar en este navegador</button>
-          <button id="dca-clear-keys" type="button">Borrar llaves</button>
-        </div>
-        <p>Estas llaves se usan solo para las funciones existentes de la escalera/cancelación desde este navegador; la prueba individual no las lee ni las envía. Se guardan en localStorage sin cifrar. La orden individual llega a Actions y usa los secretos BINANCE_API_KEY y BINANCE_API_SECRET del repositorio. Usa una clave Spot con permisos mínimos y sin retiros; no cargues secretos en un equipo compartido.</p>
-      </details>
       <span id="dca-order-status" class="op-status" role="status" aria-live="polite">La página se inicia siempre en modo controlado.</span>
       <ol id="dca-order-log" class="op-log" role="log" aria-label="Registro de simulaciones, órdenes y errores"></ol>
     </section>
@@ -880,12 +871,14 @@ footer { color: var(--muted); font-size: 13px; }
 <script>
 (function () {
   'use strict';
-  var SYMBOL = 'USDTCOP', PREFIX = 'dcaweb_', API_HOST = 'https://api.binance.com', DATA_HOST = 'https://data-api.binance.vision';
-  var KEY_STORE = 'dca_usdtcop_binance_api_key', SECRET_STORE = 'dca_usdtcop_binance_api_secret', GITHUB_TOKEN_STORE = 'dca_usdtcop_github_pat';
-  var ACK_REAL = 'REAL USDTCOP', ACK_CANCEL = 'CANCELAR DCACOP';
-  var realArmed = false, busy = false, serverOffset = 0, orderSequence = 0;
+  var SYMBOL = 'USDTCOP', GITHUB_TOKEN_STORE = 'dca_usdtcop_github_pat';
+  var busy = false;
   var $ = function (id) { return document.getElementById(id); };
-  var keyField = $('dca-api-key'), secretField = $('dca-api-secret'), githubTokenField = $('dca-github-token'), realSwitch = $('dca-real-mode'), controlledSwitch = $('dca-controlled-mode');
+  var githubTokenField = $('dca-github-token'), controlledSwitch = $('dca-controlled-mode');
+  try {
+    localStorage.removeItem('dca_usdtcop_binance_api_key');
+    localStorage.removeItem('dca_usdtcop_binance_api_secret');
+  } catch (e) {}
   var number = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 8 });
 
   function message(text) { $('dca-order-status').textContent = text; }
@@ -896,104 +889,31 @@ footer { color: var(--muted); font-size: 13px; }
     while (list.children.length > 60) list.removeChild(list.lastChild);
   }
   function fmt(value) { return number.format(Number(value)); }
-  function readCredentials() {
-    try { return { key: localStorage.getItem(KEY_STORE) || '', secret: localStorage.getItem(SECRET_STORE) || '' }; }
-    catch (e) { throw new Error('El navegador bloqueó localStorage; no se guardaron ni enviaron llaves.'); }
-  }
-  function requireCredentials() {
-    var credentials = readCredentials();
-    if (!credentials.key || !credentials.secret) throw new Error('Guarda tu API Key y API Secret en la sección de configuración.');
-    return credentials;
-  }
-  function saveKeys() {
-    var key = keyField.value.trim(), secret = secretField.value.trim();
-    if (!key || !secret) { message('Escribe ambos campos antes de guardar.'); return; }
-    try {
-      localStorage.setItem(KEY_STORE, key); localStorage.setItem(SECRET_STORE, secret);
-      keyField.value = ''; secretField.value = '';
-      message('Llaves guardadas solo en localStorage de este navegador. No se muestran en el registro.');
-      log('ok', 'Credenciales guardadas localmente; valores ocultos.');
-    } catch (e) { message('No se pudieron guardar las llaves en localStorage.'); log('error', 'El navegador rechazó el almacenamiento local.'); }
-  }
-  function clearKeys() {
-    try { localStorage.removeItem(KEY_STORE); localStorage.removeItem(SECRET_STORE); } catch (e) {}
-    keyField.value = ''; secretField.value = ''; disarmReal();
-    message('Llaves borradas de localStorage en este navegador.'); log('ok', 'Credenciales locales eliminadas.');
+  function updateGitHubTokenState() {
+    var saved = false;
+    try { saved = Boolean(localStorage.getItem(GITHUB_TOKEN_STORE)); } catch (e) {}
+    $('dca-github-token-state').textContent = saved ? 'Token guardado en este navegador' : 'Token vacío: todavía no está guardado';
+    $('dca-save-github-token').textContent = saved ? 'Cambiar Token de GitHub' : 'Guardar Token de GitHub';
   }
   function saveGitHubToken() {
     var token = githubTokenField.value.trim();
     if (!token) { message('Pega el Token de GitHub antes de guardarlo.'); return; }
-    if (!/^github_pat_[A-Za-z0-9_]+$/.test(token) && !/^ghp_[A-Za-z0-9]+$/.test(token)) { message('El token no parece un Fine-grained PAT (github_pat_…) ni un PAT clásico (ghp_…).'); return; }
+    if (!/^ghp_[A-Za-z0-9]+$/.test(token)) { message('Pega un Personal Access Token (classic) de GitHub válido (prefijo ghp_).'); return; }
     try {
       localStorage.setItem(GITHUB_TOKEN_STORE, token); githubTokenField.value = '';
+      updateGitHubTokenState();
       message('Token de GitHub guardado solo en localStorage de este navegador.'); log('ok', 'Token de GitHub guardado localmente; no se muestra en el registro.');
     } catch (e) { message('No se pudo guardar el Token de GitHub en localStorage.'); log('error', 'El navegador rechazó el almacenamiento local del token.'); }
   }
   function clearGitHubToken() {
     try { localStorage.removeItem(GITHUB_TOKEN_STORE); } catch (e) {}
     githubTokenField.value = '';
+    updateGitHubTokenState();
     message('Token de GitHub borrado de localStorage en este navegador.'); log('ok', 'Token de GitHub eliminado del almacenamiento local.');
   }
   function readGitHubToken() {
     try { return localStorage.getItem(GITHUB_TOKEN_STORE) || ''; }
     catch (e) { throw new Error('El navegador bloqueó localStorage; no se leyó el Token de GitHub.'); }
-  }
-  function apiError(response, data) {
-    var code = data && data.code !== undefined ? ' código ' + data.code : '';
-    var msg = data && typeof data.msg === 'string' ? data.msg : 'respuesta HTTP no válida';
-    throw new Error('Binance HTTP ' + response.status + code + ': ' + msg);
-  }
-  async function publicGet(path) {
-    var response;
-    try { response = await fetch(DATA_HOST + path, { cache: 'no-store' }); }
-    catch (e) { throw new Error('Sin acceso al endpoint público de Binance (red/CORS). No se envió ninguna orden.'); }
-    var data = await response.json().catch(function () { return null; });
-    if (!response.ok) apiError(response, data);
-    return data;
-  }
-  async function syncServerTime() {
-    var result = await publicGet('/api/v3/time');
-    serverOffset = Number(result.serverTime) - Date.now();
-    if (!Number.isFinite(serverOffset)) throw new Error('Binance devolvió una hora de servidor no válida.');
-  }
-  async function signQuery(values, secret) {
-    if (!window.crypto || !window.crypto.subtle) throw new Error('Este navegador no permite HMAC seguro. Abre la página publicada por HTTPS.');
-    var params = new URLSearchParams();
-    Object.keys(values).forEach(function (key) { params.set(key, String(values[key])); });
-    params.set('timestamp', String(Math.round(Date.now() + serverOffset)));
-    params.set('recvWindow', '5000');
-    var query = params.toString(), encoder = new TextEncoder();
-    var cryptoKey = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    var signed = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(query));
-    var bytes = new Uint8Array(signed), hex = '';
-    for (var i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
-    return query + '&signature=' + hex;
-  }
-  async function signedRequest(method, path, values, credentials) {
-    var query = await signQuery(values || {}, credentials.secret), response;
-    try {
-      response = await fetch(API_HOST + path + '?' + query, { method: method, headers: { 'X-MBX-APIKEY': credentials.key }, cache: 'no-store' });
-    } catch (e) {
-      var network = new Error('Sin respuesta de la API privada (red/CORS/región). Si era una orden, el resultado es incierto; no se reintentó.');
-      network.uncertain = method === 'POST' || method === 'DELETE'; throw network;
-    }
-    var data = await response.json().catch(function () { return null; });
-    if (!response.ok) apiError(response, data);
-    return data;
-  }
-  function checkAccount(account) {
-    if (account && account.canTrade === false) throw new Error('La API Key no tiene permiso Spot de trading (canTrade=false).');
-    if (account && Array.isArray(account.permissions) && account.permissions.indexOf('SPOT') < 0) throw new Error('La API Key no declara permiso SPOT.');
-  }
-  async function testConnection() {
-    if (busy) return; setBusy(true);
-    try {
-      var credentials = requireCredentials(); await syncServerTime();
-      var account = await signedRequest('GET', '/api/v3/account', {}, credentials); checkAccount(account);
-      message('Binance aceptó las credenciales y la lectura de cuenta. No se enviaron órdenes.');
-      log('ok', 'Conexión autenticada y cuenta Spot leída; no se envió ninguna orden.');
-    } catch (e) { message(e.message); log('error', e.message); }
-    finally { setBusy(false); }
   }
   function getCalculatorPlan() {
     var plan = window.__calculatorBinanceOrderPlan;
@@ -1020,42 +940,9 @@ footer { color: var(--muted); font-size: 13px; }
       return { index: pair.index, buyPrice: buyPrice, sellPrice: sellPrice, buyQty: roundTo(gross, stepText, 'floor'), sellQty: roundTo(net, stepText, 'floor'), quoteBudgetCOP: Number(pair.quoteBudgetCOP) };
     });
   }
-  function filtersFrom(symbol) {
-    var find = function (type) { return symbol.filters.find(function (filter) { return filter.filterType === type; }); };
-    var price = find('PRICE_FILTER'), lot = find('LOT_SIZE'), notional = find('NOTIONAL') || find('MIN_NOTIONAL');
-    if (!price || !lot || !notional) throw new Error('Faltan filtros PRICE_FILTER, LOT_SIZE o NOTIONAL en exchangeInfo.');
-    return { price: price, lot: lot, notional: notional, bySide: find('PERCENT_PRICE_BY_SIDE') };
-  }
-  function checkOrders(orders, filters, averagePrice) {
-    var tick = Number(filters.price.tickSize), step = Number(filters.lot.stepSize), minQty = Number(filters.lot.minQty), maxQty = Number(filters.lot.maxQty);
-    var minPrice = Number(filters.price.minPrice), maxPrice = Number(filters.price.maxPrice), minNotional = Number(filters.notional.minNotional || filters.notional.notional || 0);
-    var maxNotional = Number(filters.notional.maxNotional || 0), bids = [], asks = [];
-    orders.forEach(function (order) {
-      var notional = order.price * order.qty;
-      if (order.price < minPrice || order.price > maxPrice || Math.abs(order.price / tick - Math.round(order.price / tick)) > 1e-8) throw new Error(order.side + ' #' + order.index + ': precio fuera de PRICE_FILTER/tickSize.');
-      if (order.qty < minQty || order.qty > maxQty || Math.abs(order.qty / step - Math.round(order.qty / step)) > 1e-8) throw new Error(order.side + ' #' + order.index + ': cantidad fuera de LOT_SIZE/stepSize.');
-      if (notional + 1e-8 < minNotional || (maxNotional > 0 && notional > maxNotional)) throw new Error(order.side + ' #' + order.index + ': notional fuera del filtro NOTIONAL de Binance.');
-      if (order.side === 'BUY') bids.push(order.price); else asks.push(order.price);
-      if (filters.bySide && averagePrice > 0) {
-        var f = filters.bySide, min = order.side === 'BUY' ? Number(f.bidMultiplierDown) : Number(f.askMultiplierDown), max = order.side === 'BUY' ? Number(f.bidMultiplierUp) : Number(f.askMultiplierUp);
-        if (order.price < averagePrice * min || order.price > averagePrice * max) throw new Error(order.side + ' #' + order.index + ': precio fuera de PERCENT_PRICE_BY_SIDE de Binance.');
-      }
-    });
-    if (bids.length && asks.length && Math.min.apply(null, asks) <= Math.max.apply(null, bids)) throw new Error('La escalera LIMIT cruza precios de compra y venta; no se envió ninguna orden.');
-  }
-  function balance(account, asset) {
-    var entry = (account.balances || []).find(function (item) { return item.asset === asset; });
-    return entry ? Number(entry.free) || 0 : 0;
-  }
-  function responseSummary(response) {
-    return 'Binance respondió: orderId=' + response.orderId + ', clientOrderId=' + response.clientOrderId + ', estado=' + response.status + ', precio=' + response.price + ', cantidad=' + response.origQty + ', ejecutada=' + response.executedQty + ' USDT.';
-  }
-  function makeClientId() {
-    orderSequence++; return PREFIX + Date.now().toString(36) + '_' + orderSequence.toString(36) + '_' + Math.random().toString(36).slice(2, 7);
-  }
   function setBusy(value) {
     busy = value;
-    ['dca-simulate', 'dca-real-send', 'dca-individual-simulate', 'dca-individual-send', 'dca-individual-side', 'dca-individual-price', 'dca-individual-qty', 'dca-cancel-open', 'dca-test-connection', 'dca-real-mode', 'dca-controlled-mode', 'dca-save-keys', 'dca-clear-keys', 'dca-github-token', 'dca-save-github-token', 'dca-clear-github-token'].forEach(function (id) { $(id).disabled = value; });
+    ['dca-simulate', 'dca-individual-simulate', 'dca-individual-send', 'dca-individual-side', 'dca-individual-price', 'dca-individual-qty', 'dca-github-token', 'dca-save-github-token', 'dca-clear-github-token'].forEach(function (id) { if ($(id)) $(id).disabled = value; });
   }
   function simulate() {
     try {
@@ -1121,102 +1008,16 @@ footer { color: var(--muted); font-size: 13px; }
     } catch (e) { message(e.message); log('error', e.message); }
     finally { setBusy(false); }
   }
-  async function prepareRealOrders() {
-    var plan = getCalculatorPlan(), liveData = await publicGet('/api/v3/ticker/price?symbol=' + SYMBOL), live = Number(liveData && liveData.price);
-    if (!(live > 0)) throw new Error('Binance no devolvió un precio vivo válido; se canceló la preparación.');
-    var info = await publicGet('/api/v3/exchangeInfo?symbol=' + SYMBOL), symbol = (info.symbols || []).find(function (item) { return item.symbol === SYMBOL; });
-    if (!symbol || symbol.status !== 'TRADING' || symbol.isSpotTradingAllowed !== true || symbol.baseAsset !== 'USDT' || symbol.quoteAsset !== 'COP') throw new Error('USDTCOP no figura habilitado para Spot USDT/COP en exchangeInfo.');
-    var filters = filtersFrom(symbol), average = await publicGet('/api/v3/avgPrice?symbol=' + SYMBOL).catch(function () { return null; });
-    if (filters.bySide && !(Number(average && average.price) > 0)) throw new Error('No se pudo obtener el promedio necesario para validar PERCENT_PRICE_BY_SIDE; no se envió ninguna orden.');
-    var pairs = projectOrders(plan, live, filters.price.tickSize, filters.lot.stepSize), orders = [];
-    pairs.forEach(function (pair) {
-      orders.push({ side: 'BUY', index: pair.index, price: pair.buyPrice, qty: pair.buyQty });
-      orders.push({ side: 'SELL', index: pair.index, price: pair.sellPrice, qty: pair.sellQty });
-    });
-    checkOrders(orders, filters, Number(average && average.price));
-    await syncServerTime();
-    var credentials = requireCredentials(), account = await signedRequest('GET', '/api/v3/account', {}, credentials); checkAccount(account);
-    var copFree = balance(account, symbol.quoteAsset), usdtFree = balance(account, symbol.baseAsset);
-    var copRequired = orders.filter(function (order) { return order.side === 'BUY'; }).reduce(function (sum, order) { return sum + order.price * order.qty; }, 0);
-    var usdtRequired = orders.filter(function (order) { return order.side === 'SELL'; }).reduce(function (sum, order) { return sum + order.qty; }, 0);
-    if (copFree + 1e-8 < copRequired) throw new Error('Saldo COP insuficiente: disponible ' + fmt(copFree) + ', requerido ' + fmt(copRequired) + '. Se bloqueó toda la escalera.');
-    if (usdtFree + 1e-8 < usdtRequired) throw new Error('Saldo USDT insuficiente para las ventas (no se cuentan compras aún no ejecutadas): disponible ' + fmt(usdtFree) + ', requerido ' + fmt(usdtRequired) + '. Se bloqueó toda la escalera.');
-    return { orders: orders, credentials: credentials, live: live, copFree: copFree, usdtFree: usdtFree, copRequired: copRequired, usdtRequired: usdtRequired };
-  }
-  async function sendRealOrders() {
-    if (busy) return;
-    if (!realArmed) { message('El envío real está desarmado; activa el segundo switch con la confirmación explícita.'); return; }
-    if (!window.confirm('Se enviarán órdenes LIMIT GTC reales de USDTCOP, una por una. Revisa precios y saldos. ¿Continuar?')) return;
-    setBusy(true);
-    try {
-      var prepared = await prepareRealOrders();
-      log('ok', 'Prevalidación: precio vivo ' + fmt(prepared.live) + ' COP; COP disponibles/requeridos ' + fmt(prepared.copFree) + '/' + fmt(prepared.copRequired) + '; USDT disponibles/requeridos ' + fmt(prepared.usdtFree) + '/' + fmt(prepared.usdtRequired) + '.');
-      for (var i = 0; i < prepared.orders.length; i++) {
-        var order = prepared.orders[i], clientOrderId = makeClientId();
-        try {
-          var response = await signedRequest('POST', '/api/v3/order', { symbol: SYMBOL, side: order.side, type: 'LIMIT', timeInForce: 'GTC', quantity: String(order.qty), price: String(order.price), newClientOrderId: clientOrderId }, prepared.credentials);
-          log('ok', responseSummary(response));
-        } catch (e) {
-          log('error', order.side + ' #' + order.index + ' · ' + fmt(order.price) + ' COP · ' + fmt(order.qty) + ' USDT: ' + e.message);
-          if (e.uncertain) log('error', 'Resultado indeterminado: verifica las órdenes abiertas en Binance antes de volver a intentarlo. No se reintentó.');
-          message('Ejecución detenida tras el primer error. Consulta el registro; no hubo reintento automático.'); return;
-        }
-      }
-      message(prepared.orders.length + ' órdenes LIMIT aceptadas por Binance. Revisa el registro y las órdenes abiertas.');
-    } catch (e) { message(e.message); log('error', e.message); }
-    finally { setBusy(false); }
-  }
-  async function cancelOpenOrders() {
-    if (busy) return;
-    if (!realArmed) { log('sim', 'Simulación de cancelación: ninguna orden consultada ni cancelada. Activa el modo real para cancelar órdenes dcaweb_.'); message('Modo controlado: no se consultaron ni cancelaron órdenes reales.'); return; }
-    if (!window.confirm('Se consultarán las órdenes abiertas USDTCOP creadas por esta calculadora (clientOrderId dcaweb_). Las demás no se tocarán. ¿Continuar?')) return;
-    if (window.prompt('Escribe ' + ACK_CANCEL + ' para confirmar') !== ACK_CANCEL) { message('Cancelación real no confirmada.'); return; }
-    setBusy(true);
-    try {
-      var credentials = requireCredentials(); await syncServerTime();
-      var open = await signedRequest('GET', '/api/v3/openOrders', { symbol: SYMBOL }, credentials);
-      var mine = open.filter(function (order) { return typeof order.clientOrderId === 'string' && order.clientOrderId.indexOf(PREFIX) === 0; });
-      if (!mine.length) { message('No hay órdenes abiertas de esta calculadora.'); log('ok', 'Binance informó cero órdenes abiertas con prefijo ' + PREFIX + '.'); return; }
-      for (var i = 0; i < mine.length; i++) {
-        var order = mine[i];
-        try {
-          var result = await signedRequest('DELETE', '/api/v3/order', { symbol: SYMBOL, origClientOrderId: order.clientOrderId }, credentials);
-          log('ok', 'Cancelada · clientOrderId=' + result.clientOrderId + ' · estado=' + result.status + ' · orderId=' + result.orderId + '.');
-        } catch (e) { log('error', 'No se pudo confirmar la cancelación de ' + order.clientOrderId + ': ' + e.message); if (e.uncertain) log('error', 'Resultado de cancelación indeterminado; no se reintentó.'); break; }
-      }
-      message('Cancelación procesada; revisa el registro y el estado en Binance.');
-    } catch (e) { message(e.message); log('error', e.message); }
-    finally { setBusy(false); }
-  }
-  function disarmReal() {
-    realArmed = false; realSwitch.checked = false; controlledSwitch.checked = true;
-    $('dca-simulate').hidden = false; $('dca-real-send').hidden = true;
-    modeMessage('Modo controlado activo; no se envían órdenes.');
-  }
-  $('dca-save-keys').addEventListener('click', saveKeys);
-  $('dca-clear-keys').addEventListener('click', clearKeys);
   $('dca-save-github-token').addEventListener('click', saveGitHubToken);
   $('dca-clear-github-token').addEventListener('click', clearGitHubToken);
   $('dca-simulate').addEventListener('click', simulate);
-  $('dca-real-send').addEventListener('click', sendRealOrders);
   $('dca-individual-simulate').addEventListener('click', simulateIndividualOrder);
   $('dca-individual-send').addEventListener('click', sendIndividualOrder);
-  $('dca-cancel-open').addEventListener('click', cancelOpenOrders);
-  $('dca-test-connection').addEventListener('click', testConnection);
-  controlledSwitch.addEventListener('change', function () { if (controlledSwitch.checked) { disarmReal(); message('Modo controlado activo.'); } else if (!realArmed) { controlledSwitch.checked = true; modeMessage('Para habilitar órdenes reales, usa el segundo switch y confirma.'); } });
-  realSwitch.addEventListener('change', function () {
-    if (!realSwitch.checked) { disarmReal(); message('Modo controlado activo; no se envían órdenes.'); return; }
-    try { requireCredentials(); }
-    catch (e) { realSwitch.checked = false; modeMessage(e.message); message(e.message); return; }
-    if (!window.confirm('Activar envío real de órdenes LIMIT Spot USDTCOP. La siguiente acción de envío requiere otra confirmación. ¿Continuar?') || window.prompt('Escribe ' + ACK_REAL + ' para habilitar el modo real') !== ACK_REAL) {
-      realSwitch.checked = false; modeMessage('No se activó el modo real.'); message('Confirmación incompleta; la página sigue en modo controlado.'); return;
-    }
-    realArmed = true; controlledSwitch.checked = false;
-    $('dca-simulate').hidden = true; $('dca-real-send').hidden = false;
-    modeMessage('Modo REAL armado temporalmente para la escalera. El envío individual usa por separado el Token de GitHub y su propia confirmación; recargar vuelve al modo controlado.');
-    message('Modo real armado. Verifica las credenciales con “Probar conexión” antes de enviar.');
-    log('error', 'Modo REAL armado por confirmación explícita; no se envió ninguna orden.');
+  controlledSwitch.addEventListener('change', function () {
+    if (!controlledSwitch.checked) controlledSwitch.checked = true;
+    modeMessage('Modo controlado activo; el navegador no almacena llaves de Binance.');
   });
+  updateGitHubTokenState();
   window.updateBinanceExecutionPlan = function (plan) {
     if (!plan || !Array.isArray(plan.pairs) || !plan.pairs.length) message('No hay una escalera válida para simular o enviar.');
   };
