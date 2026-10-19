@@ -284,11 +284,11 @@ footer { color: var(--muted); font-size: 13px; }
     return '<section id="binance-live-candle-chart" aria-label="Velas en vivo USDT/COP" style="width:100%;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><strong style="font-size:14px;color:var(--ink)">Velas en vivo · Binance Spot USDT/COP</strong>' +
       '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)">Temporalidad <select id="binance-candle-timeframe" aria-label="Temporalidad del gráfico" style="font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px">' +
-      '<option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option></select></label></div>' +
+      '<option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="3h">3h</option><option value="4h">4h</option><option value="1d">1d</option></select></label></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px"><div id="binance-candle-status" role="status" style="font-size:12px;color:var(--muted)">Cargando velas…</div><button id="binance-candle-follow" type="button" hidden aria-label="Volver a seguir el precio en vivo" style="font:inherit;font-size:11px;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:5px;padding:4px 8px;cursor:pointer">Seguir</button></div>' +
       '<div style="width:100%;height:260px;min-width:0"><canvas id="binance-candle-canvas" aria-label="Velas japonesas con precio y órdenes proyectadas. Arrastrar para desplazar; rueda o pellizco para zoom." style="display:block;width:100%;height:100%;touch-action:none;cursor:grab"></canvas></div>' +
       '<div id="binance-order-distances" role="list" aria-label="Distancia de cada orden proyectada al precio en vivo" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;font-size:11px"></div>' +
-      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)"><span><i style="display:inline-block;width:15px;border-top:2px solid var(--accent);vertical-align:middle;margin-right:5px"></i>Precio en vivo</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-buy);vertical-align:middle;margin-right:5px"></i>Compras proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-sell);vertical-align:middle;margin-right:5px"></i>Ventas proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px solid #fb8c00;vertical-align:middle;margin-right:5px"></i>Orden cercana</span></div></section>';
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)"><span><i style="display:inline-block;width:15px;border-top:2px solid #29B6F6;vertical-align:middle;margin-right:5px"></i>Precio en vivo</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-buy);vertical-align:middle;margin-right:5px"></i>Compras proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-sell);vertical-align:middle;margin-right:5px"></i>Ventas proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px solid #fb8c00;vertical-align:middle;margin-right:5px"></i>Orden cercana</span></div></section>';
   };
 
   function status(text) { state.status = text; var el = document.getElementById('binance-candle-status'); if (el) el.textContent = text; }
@@ -301,6 +301,19 @@ footer { color: var(--muted); font-size: 13px; }
     return attempt();
   }
   function parse(row) { return { time: Math.floor(Number(row[0]) / 1000), open: Number(row[1]), high: Number(row[2]), low: Number(row[3]), close: Number(row[4]) }; }
+  function aggregate3h(rows) {
+    var intervalMs = 3 * 60 * 60 * 1000, groups = Object.create(null);
+    rows.forEach(function (row) {
+      var candle = parse(row), bucketMs = Math.floor(candle.time * 1000 / intervalMs) * intervalMs, key = String(bucketMs), current = groups[key];
+      if (!current) groups[key] = { time: bucketMs / 1000, open: candle.open, high: candle.high, low: candle.low, close: candle.close, lastTime: candle.time };
+      else { current.high = Math.max(current.high, candle.high); current.low = Math.min(current.low, candle.low); if (candle.time >= current.lastTime) { current.close = candle.close; current.lastTime = candle.time; } }
+    });
+    return Object.keys(groups).map(function (key) { var candle = groups[key]; delete candle.lastTime; return candle; }).sort(function (a, b) { return a.time - b.time; });
+  }
+  function fetchCandles(tf, limit) {
+    if (tf === '3h') return fetchBinance(klinesPath('1h', Math.min(1000, limit * 3))).then(function (rows) { return aggregate3h(rows).slice(-limit); });
+    return fetchBinance(klinesPath(tf, limit)).then(function (rows) { return rows.map(parse); });
+  }
 
   function distancePct(orderPrice, livePrice) { return livePrice > 0 ? (orderPrice - livePrice) / livePrice * 100 : null; }
   function proximity(distance) {
@@ -352,7 +365,7 @@ footer { color: var(--muted); font-size: 13px; }
     var dpr = Math.max(1, window.devicePixelRatio || 1); canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     var c = canvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
     var css = getComputedStyle(document.documentElement), color = function (name, fallback) { return css.getPropertyValue(name).trim() || fallback; };
-    var ink = color('--ink', '#14211e'), muted = color('--muted', '#5b6b66'), grid = color('--line', '#d3dbd8'), up = color('--gain', '#0d6b5c'), down = color('--loss', '#b3372b'), buy = color('--zone-buy', '#0d6b5c'), sell = color('--zone-sell', '#9a5f00'), accent = color('--accent', '#0d6b5c');
+    var ink = color('--ink', '#14211e'), muted = color('--muted', '#5b6b66'), grid = color('--line', '#d3dbd8'), up = color('--gain', '#0d6b5c'), down = color('--loss', '#b3372b'), buy = color('--zone-buy', '#0d6b5c'), sell = color('--zone-sell', '#9a5f00'), accent = color('--accent', '#0d6b5c'), liveBlue = '#29B6F6';
     c.clearRect(0, 0, w, h); c.fillStyle = color('--surface', '#fff'); c.fillRect(0, 0, w, h);
     var left = 8, right = 76, top = 12, bottom = 26, pw = w - left - right, ph = h - top - bottom, vals = [];
     visible.forEach(function (q) { vals.push(q.low, q.high); });
@@ -383,7 +396,7 @@ footer { color: var(--muted); font-size: 13px; }
       if (near.intensity) { c.lineWidth = 1.2; c.beginPath(); c.moveTo(w - right + 4, y(live)); c.lineTo(w - right + 4, yy); c.stroke(); c.beginPath(); c.arc(w - right + 4, yy, 2.5 + near.intensity * 2, 0, Math.PI * 2); c.fillStyle = stroke; c.fill(); }
       c.restore(); c.fillStyle = stroke; c.textAlign = 'left'; c.fillText(order.label, order.xLabel, Math.max(top + 5, Math.min(top + ph - 5, yy - 5)));
     });
-    var ly = y(live); c.strokeStyle = accent; c.lineWidth = 1.2; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.setLineDash([]); c.fillStyle = accent; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillText(format(live), w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
+    var ly = y(live); c.strokeStyle = liveBlue; c.lineWidth = 1.5; c.setLineDash([]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.fillStyle = liveBlue; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillStyle = liveBlue; c.fillText(format(live) + ' COP', w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
     c.font = '10px system-ui,sans-serif'; c.fillStyle = muted; c.textAlign = 'center'; var every = Math.max(1, Math.floor(visible.length / 5));
     visible.forEach(function (q, i) { if (i % every === 0 || i === visible.length - 1) { var dt = new Date(q.time * 1000), label = state.interval === '1d' ? new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', timeZone: 'America/Bogota' }).format(dt) : new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }).format(dt); c.fillText(label, x(i), h - 10); } }); c.fillStyle = ink;
   }
@@ -410,15 +423,7 @@ footer { color: var(--muted); font-size: 13px; }
       var count = state.viewCount || state.candles.length, next = count * (event.deltaY < 0 ? 0.8 : 1.25), anchor = (state.viewStart || 0) + fraction * count;
       setView(anchor - fraction * next, next, true);
     }, { passive: false });
-    canvas.addEventListener('pointerdown', function (event) {
-      if (!state.candles.length || (event.pointerType === 'mouse' && event.button !== 0)) return;
-      event.preventDefault(); state.pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
-      if (canvas.setPointerCapture) canvas.setPointerCapture(event.pointerId);
-      canvas.style.cursor = 'grabbing'; resetGesture();
-    });
-    canvas.addEventListener('pointermove', function (event) {
-      if (!Object.prototype.hasOwnProperty.call(state.pointers, event.pointerId)) return;
-      state.pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
+    function applyGesture() {
       var ids = Object.keys(state.pointers), rect = canvas.getBoundingClientRect();
       if (ids.length >= 2) {
         var a = state.pointers[ids[0]], b = state.pointers[ids[1]], mid = (a.x + b.x) / 2, separation = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
@@ -427,26 +432,67 @@ footer { color: var(--muted); font-size: 13px; }
         setView(gesture.anchor - fraction * next, next, true);
       } else if (ids.length === 1) {
         if (!state.gesture || state.gesture.type !== 'pan') resetGesture();
-        var pan = state.gesture, dx = event.clientX - pan.x;
-        setView(pan.start - dx / plotWidth() * pan.count, pan.count, true);
+        var pan = state.gesture, point = state.pointers[ids[0]];
+        setView(pan.start - (point.x - pan.x) / plotWidth() * pan.count, pan.count, true);
       }
-    });
+    }
+    function startPointer(event) {
+      if (!state.candles.length || (event.pointerType === 'mouse' && event.button !== 0)) return;
+      event.preventDefault(); state.pointers[event.pointerId] = { x: event.clientX, y: event.clientY };
+      if (canvas.setPointerCapture) { try { canvas.setPointerCapture(event.pointerId); } catch (e) {} }
+      canvas.style.cursor = 'grabbing'; resetGesture();
+    }
+    function movePointer(event) {
+      if (!Object.prototype.hasOwnProperty.call(state.pointers, event.pointerId)) return;
+      state.pointers[event.pointerId] = { x: event.clientX, y: event.clientY }; applyGesture();
+    }
     function endPointer(event) {
       delete state.pointers[event.pointerId]; resetGesture();
       if (!Object.keys(state.pointers).length) canvas.style.cursor = 'grab';
     }
-    canvas.addEventListener('pointerup', endPointer); canvas.addEventListener('pointercancel', endPointer); canvas.addEventListener('lostpointercapture', endPointer);
+    canvas.addEventListener('pointerdown', startPointer);
+    canvas.addEventListener('pointermove', movePointer);
+    canvas.addEventListener('pointerup', endPointer);
+    canvas.addEventListener('pointercancel', endPointer);
+    canvas.addEventListener('lostpointercapture', endPointer);
+    function touchKey(touch) { return 'touch-' + touch.identifier; }
+    function startTouch(event) {
+      if (window.PointerEvent || !state.candles.length) return;
+      event.preventDefault();
+      Array.prototype.forEach.call(event.changedTouches, function (touch) { state.pointers[touchKey(touch)] = { x: touch.clientX, y: touch.clientY }; });
+      canvas.style.cursor = 'grabbing'; resetGesture();
+    }
+    function moveTouch(event) {
+      if (window.PointerEvent) return;
+      event.preventDefault();
+      Array.prototype.forEach.call(event.changedTouches, function (touch) {
+        var id = touchKey(touch);
+        if (Object.prototype.hasOwnProperty.call(state.pointers, id)) state.pointers[id] = { x: touch.clientX, y: touch.clientY };
+      });
+      applyGesture();
+    }
+    function endTouch(event) {
+      if (window.PointerEvent) return;
+      event.preventDefault();
+      Array.prototype.forEach.call(event.changedTouches, function (touch) { delete state.pointers[touchKey(touch)]; });
+      resetGesture();
+      if (!Object.keys(state.pointers).length) canvas.style.cursor = 'grab';
+    }
+    canvas.addEventListener('touchstart', startTouch, { passive: false });
+    canvas.addEventListener('touchmove', moveTouch, { passive: false });
+    canvas.addEventListener('touchend', endTouch, { passive: false });
+    canvas.addEventListener('touchcancel', endTouch, { passive: false });
   }
 
   async function history() {
     var token = ++state.generation, tf = state.interval; status('Cargando velas de ' + tf + '…');
-    try { var rows = await fetchBinance(klinesPath(tf, 200)); if (token !== state.generation) return; state.candles = rows.map(parse).filter(function (q) { return Number.isFinite(q.close) && q.close > 0; }).slice(-200); state.viewStart = 0; state.viewCount = 0; state.livePrice = state.candles.length ? state.candles[state.candles.length - 1].close : null; status('Binance Spot · ' + tf + ' · ' + state.candles.length + ' velas'); draw(); refresh(); }
+    try { var candles = await fetchCandles(tf, 200); if (token !== state.generation) return; state.candles = candles.filter(function (q) { return Number.isFinite(q.close) && q.close > 0; }).slice(-200); state.viewStart = 0; state.viewCount = 0; state.livePrice = state.candles.length ? state.candles[state.candles.length - 1].close : null; status('Binance Spot · ' + tf + ' · ' + state.candles.length + ' velas'); draw(); refresh(); }
     catch (e) { if (token === state.generation) { status('sin conexión'); draw(); } }
   }
   async function refresh() {
     if (!state.candles.length || state.busy) return; state.busy = true; var token = state.generation, tf = state.interval;
-    try { var result = await Promise.all([fetchBinance(klinesPath(tf, 1)), fetchBinance('/api/v3/ticker/price?symbol=USDTCOP').catch(function () { return null; })]); if (token !== state.generation) return;
-      var latest = parse(result[0][result[0].length - 1]), last = state.candles[state.candles.length - 1]; if (latest.time === last.time) state.candles[state.candles.length - 1] = latest; else state.candles = state.candles.concat([latest]).slice(-200);
+    try { var result = await Promise.all([fetchCandles(tf, 1), fetchBinance('/api/v3/ticker/price?symbol=USDTCOP').catch(function () { return null; })]); if (token !== state.generation) return;
+      var latest = result[0][result[0].length - 1], last = state.candles[state.candles.length - 1]; if (!latest) throw new Error('Sin velas'); if (latest.time === last.time) state.candles[state.candles.length - 1] = latest; else state.candles = state.candles.concat([latest]).slice(-200);
       var p = result[1] && Number(result[1].price); state.livePrice = Number.isFinite(p) && p > 0 ? p : latest.close;
       if (state.follow) { state.viewCount = Math.min(state.viewCount || 200, state.candles.length); state.viewStart = Math.max(0, state.candles.length - state.viewCount); }
       status('Binance Spot · ' + tf + ' · actualizado ' + new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Bogota' }).format(new Date())); draw();
