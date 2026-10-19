@@ -153,7 +153,9 @@ footer { color: var(--muted); font-size: 13px; }
 .op-log .error { color: var(--loss); }
 .op-log .ok { color: var(--gain); }
 .op-log .sim { color: var(--muted); }
-#dca-real-send[hidden] { display: none; }
+#dca-real-send[hidden], #dca-individual-send[hidden] { display: none; }
+.op-individual { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.op-individual h3 { margin: 0 0 6px; font-size: 13px; color: var(--ink); }
 </style>
 
 <div class="wrap">
@@ -293,6 +295,25 @@ footer { color: var(--muted); font-size: 13px; }
         <button id="dca-cancel-open" type="button">Cancelar abiertas de esta calculadora</button>
         <button id="dca-test-connection" type="button">Probar conexión</button>
       </div>
+      <section class="op-individual" aria-labelledby="dca-individual-title">
+        <h3 id="dca-individual-title">PRUEBA INDIVIDUAL · una orden</h3>
+        <p>Independiente de la escalera. Elige lado, precio COP y cantidad USDT; en modo real se validan filtros y saldo y se envía como máximo una orden LIMIT.</p>
+        <div class="op-fields">
+          <label for="dca-individual-side">Lado
+            <select id="dca-individual-side"><option value="BUY">Compra</option><option value="SELL">Venta</option></select>
+          </label>
+          <label for="dca-individual-price">Precio límite (COP)
+            <input id="dca-individual-price" type="number" min="0" step="any" inputmode="decimal" placeholder="Escribe el precio">
+          </label>
+          <label for="dca-individual-qty">Cantidad (USDT)
+            <input id="dca-individual-qty" type="number" min="0" step="any" inputmode="decimal" placeholder="Escribe la cantidad">
+          </label>
+        </div>
+        <div class="op-actions">
+          <button id="dca-individual-simulate" type="button">Simular orden individual</button>
+          <button id="dca-individual-send" class="primary" type="button" hidden>Enviar UNA orden LIMIT real</button>
+        </div>
+      </section>
       <details>
         <summary>Configurar llaves de Binance en este navegador</summary>
         <div class="op-fields">
@@ -1007,7 +1028,7 @@ footer { color: var(--muted); font-size: 13px; }
   }
   function setBusy(value) {
     busy = value;
-    ['dca-simulate', 'dca-real-send', 'dca-cancel-open', 'dca-test-connection', 'dca-real-mode', 'dca-controlled-mode', 'dca-save-keys', 'dca-clear-keys'].forEach(function (id) { $(id).disabled = value; });
+    ['dca-simulate', 'dca-real-send', 'dca-individual-simulate', 'dca-individual-send', 'dca-individual-side', 'dca-individual-price', 'dca-individual-qty', 'dca-cancel-open', 'dca-test-connection', 'dca-real-mode', 'dca-controlled-mode', 'dca-save-keys', 'dca-clear-keys'].forEach(function (id) { $(id).disabled = value; });
   }
   function simulate() {
     try {
@@ -1018,6 +1039,63 @@ footer { color: var(--muted); font-size: 13px; }
       });
       message(pairs.length + ' parejas simuladas; sin llamadas de trading ni órdenes reales.');
     } catch (e) { message(e.message); log('error', e.message); }
+  }
+  function readIndividualOrder() {
+    var side = $('dca-individual-side').value, priceText = $('dca-individual-price').value.trim(), qtyText = $('dca-individual-qty').value.trim();
+    var price = Number(priceText), qty = Number(qtyText);
+    if (side !== 'BUY' && side !== 'SELL') throw new Error('Elige compra o venta para la orden individual.');
+    if (!priceText || !Number.isFinite(price) || price <= 0) throw new Error('Escribe un precio límite COP mayor que cero.');
+    if (!qtyText || !Number.isFinite(qty) || qty <= 0) throw new Error('Escribe una cantidad USDT mayor que cero.');
+    return { side: side, price: price, qty: qty, notional: price * qty };
+  }
+  function simulateIndividualOrder() {
+    try {
+      var order = readIndividualOrder();
+      log('sim', 'SIMULADA · LIMIT ' + order.side + ' individual · ' + fmt(order.qty) + ' USDT a ' + fmt(order.price) + ' COP · notional ' + fmt(order.notional) + ' COP · no enviada.');
+      message('Orden individual simulada; sin llamadas de trading ni orden real.');
+    } catch (e) { message(e.message); log('error', e.message); }
+  }
+  async function prepareIndividualOrder() {
+    var order = readIndividualOrder(), liveData = await publicGet('/api/v3/ticker/price?symbol=' + SYMBOL), live = Number(liveData && liveData.price);
+    if (!(live > 0)) throw new Error('Binance no devolvió un precio vivo válido; se canceló la preparación.');
+    if (order.side === 'BUY' && order.price >= live) throw new Error('La compra debe quedar por debajo del precio vivo (' + fmt(live) + ' COP); se conserva el precio que escribiste.');
+    if (order.side === 'SELL' && order.price <= live) throw new Error('La venta debe quedar por encima del precio vivo (' + fmt(live) + ' COP); se conserva el precio que escribiste.');
+    var info = await publicGet('/api/v3/exchangeInfo?symbol=' + SYMBOL), symbol = (info.symbols || []).find(function (item) { return item.symbol === SYMBOL; });
+    if (!symbol || symbol.status !== 'TRADING' || symbol.isSpotTradingAllowed !== true || symbol.baseAsset !== 'USDT' || symbol.quoteAsset !== 'COP') throw new Error('USDTCOP no figura habilitado para Spot USDT/COP en exchangeInfo.');
+    var filters = filtersFrom(symbol), average = await publicGet('/api/v3/avgPrice?symbol=' + SYMBOL).catch(function () { return null; });
+    if (filters.bySide && !(Number(average && average.price) > 0)) throw new Error('No se pudo obtener el promedio necesario para validar PERCENT_PRICE_BY_SIDE; no se envió ninguna orden.');
+    checkOrders([Object.assign({ index: 1 }, order)], filters, Number(average && average.price));
+    await syncServerTime();
+    var credentials = requireCredentials(), account = await signedRequest('GET', '/api/v3/account', {}, credentials); checkAccount(account);
+    var availableCOP = balance(account, 'COP'), availableUSDT = balance(account, 'USDT');
+    if (order.side === 'BUY' && availableCOP + 1e-8 < order.notional) throw new Error('Saldo COP insuficiente: disponible ' + fmt(availableCOP) + ', requerido ' + fmt(order.notional) + '.');
+    if (order.side === 'SELL' && availableUSDT + 1e-8 < order.qty) throw new Error('Saldo USDT insuficiente: disponible ' + fmt(availableUSDT) + ', requerido ' + fmt(order.qty) + '.');
+    return { order: order, credentials: credentials, live: live, availableCOP: availableCOP, availableUSDT: availableUSDT };
+  }
+  async function sendIndividualOrder() {
+    if (busy) return;
+    if (!realArmed) { message('El envío real está desarmado; activa el modo REAL con su confirmación explícita.'); return; }
+    setBusy(true);
+    message('Validando precio, filtros y saldo de una orden individual; la escalera no se enviará.');
+    try {
+      var prepared = await prepareIndividualOrder(), order = prepared.order;
+      var confirmation = [
+        'Enviar EXACTAMENTE UNA orden LIMIT GTC real de USDTCOP?', '',
+        'Lado: ' + (order.side === 'BUY' ? 'COMPRA' : 'VENTA'),
+        'Cantidad: ' + fmt(order.qty) + ' USDT',
+        'Precio límite: ' + fmt(order.price) + ' COP',
+        'Notional: ' + fmt(order.notional) + ' COP',
+        'Precio vivo consultado: ' + fmt(prepared.live) + ' COP', '',
+        'No se enviará la escalera.'
+      ].join(String.fromCharCode(10));
+      if (!window.confirm(confirmation)) { message('Envío individual cancelado; no se envió ninguna orden.'); log('sim', 'Envío individual cancelado en la confirmación final; no enviada.'); return; }
+      var clientOrderId = makeClientId(), response = await signedRequest('POST', '/api/v3/order', { symbol: SYMBOL, side: order.side, type: 'LIMIT', timeInForce: 'GTC', quantity: String(order.qty), price: String(order.price), newClientOrderId: clientOrderId }, prepared.credentials);
+      log('ok', 'Orden individual LIMIT ' + order.side + ' aceptada · ' + responseSummary(response));
+      message('Binance aceptó una orden LIMIT individual. No se envió la escalera; revisa el registro y las órdenes abiertas.');
+    } catch (e) {
+      message(e.message); log('error', e.message);
+      if (e.uncertain) log('error', 'Resultado de la orden individual indeterminado: verifica Binance antes de actuar de nuevo. No se reintentó.');
+    } finally { setBusy(false); }
   }
   async function prepareRealOrders() {
     var plan = getCalculatorPlan(), liveData = await publicGet('/api/v3/ticker/price?symbol=' + SYMBOL), live = Number(liveData && liveData.price);
@@ -1089,12 +1167,15 @@ footer { color: var(--muted); font-size: 13px; }
   function disarmReal() {
     realArmed = false; realSwitch.checked = false; controlledSwitch.checked = true;
     $('dca-simulate').hidden = false; $('dca-real-send').hidden = true;
+    $('dca-individual-simulate').hidden = false; $('dca-individual-send').hidden = true;
     modeMessage('Modo controlado activo; no se envían órdenes.');
   }
   $('dca-save-keys').addEventListener('click', saveKeys);
   $('dca-clear-keys').addEventListener('click', clearKeys);
   $('dca-simulate').addEventListener('click', simulate);
   $('dca-real-send').addEventListener('click', sendRealOrders);
+  $('dca-individual-simulate').addEventListener('click', simulateIndividualOrder);
+  $('dca-individual-send').addEventListener('click', sendIndividualOrder);
   $('dca-cancel-open').addEventListener('click', cancelOpenOrders);
   $('dca-test-connection').addEventListener('click', testConnection);
   controlledSwitch.addEventListener('change', function () { if (controlledSwitch.checked) { disarmReal(); message('Modo controlado activo.'); } else if (!realArmed) { controlledSwitch.checked = true; modeMessage('Para habilitar órdenes reales, usa el segundo switch y confirma.'); } });
@@ -1107,7 +1188,8 @@ footer { color: var(--muted); font-size: 13px; }
     }
     realArmed = true; controlledSwitch.checked = false;
     $('dca-simulate').hidden = true; $('dca-real-send').hidden = false;
-    modeMessage('Modo REAL armado temporalmente. Cada lote pide confirmación; recargar vuelve al modo controlado.');
+    $('dca-individual-simulate').hidden = true; $('dca-individual-send').hidden = false;
+    modeMessage('Modo REAL armado temporalmente. Cada envío pide confirmación; recargar vuelve al modo controlado.');
     message('Modo real armado. Verifica las credenciales con “Probar conexión” antes de enviar.');
     log('error', 'Modo REAL armado por confirmación explícita; no se envió ninguna orden.');
   });
