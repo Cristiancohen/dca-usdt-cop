@@ -22,7 +22,9 @@
 </main>
 <script>
 (() => {
-  const feed = 'https://raw.githubusercontent.com/Cristiancohen/dca-usdt-cop/main/monitor/log.json';
+  const feed = 'https://api.github.com/repos/Cristiancohen/dca-usdt-cop/contents/monitor/log.json?ref=main';
+  let etag = '';
+  let cachedEntries = null;
   const latest = document.getElementById('latest');
   const history = document.getElementById('history');
   const status = document.getElementById('latest-status');
@@ -38,7 +40,7 @@
     const order = item.order_received || {};
     const grid = el('div',undefined,'grid');
     const add = (label,value,wide=false) => { const d=el('div',undefined,wide?'datum wide':'datum'); d.append(el('small',label),el('strong',value ?? 'No informado')); grid.append(d); };
-    add('Hora (UTC)', prettyTime(item.timestamp));
+    add('Hora local', prettyTime(item.timestamp));
     add('Orden recibida', `${order.lado ?? '—'} · ${order.precio ?? '—'} COP`);
     add('Cantidad indicada', `${order.cantidad ?? '—'} USDT`);
     const p=item.proxy||{};
@@ -82,10 +84,20 @@
   };
   async function load() {
     try {
-      const response=await fetch(`${feed}?t=${Date.now()}`,{cache:'no-store'});
-      if(!response.ok) throw new Error(`HTTP ${response.status} al leer la bitácora`);
-      const data=await response.json(); const entries=Array.isArray(data.entries)?data.entries:[];
-      renderLatest(entries[0]); renderHistory(entries);
+      const headers={'Accept':'application/vnd.github+json'};
+      if(etag) headers['If-None-Match']=etag;
+      const response=await fetch(feed,{headers,cache:'no-store'});
+      if(response.status===304 && cachedEntries){
+        renderLatest(cachedEntries[0]); renderHistory(cachedEntries);
+      } else {
+        if(!response.ok) throw new Error(`HTTP ${response.status} al leer la bitácora`);
+        etag=response.headers.get('ETag')||etag;
+        const file=await response.json();
+        const bytes=Uint8Array.from(atob((file.content||'').replace(/\s/g,'')),c=>c.charCodeAt(0));
+        const data=JSON.parse(new TextDecoder().decode(bytes));
+        cachedEntries=Array.isArray(data.entries)?data.entries:[];
+        renderLatest(cachedEntries[0]); renderHistory(cachedEntries);
+      }
       refresh.textContent=`Actualizado ${new Date().toLocaleTimeString('es-CO')} · próximo en 20 s`;
     } catch(err) {
       if(!history.childElementCount||history.textContent.includes('Cargando')) history.replaceChildren(el('div',err.message,'empty'));
