@@ -378,13 +378,12 @@ footer { color: var(--muted); font-size: 13px; }
     orders.sort(function (a, b) { return proximity(distancePct(a.price, live)).intensity - proximity(distancePct(b.price, live)).intensity; });
     orders.forEach(function (order) {
       var yy = y(order.price), near = proximity(distancePct(order.price, live)), stroke = near.color || order.color;
-      c.save(); c.strokeStyle = stroke; c.lineWidth = 1 + near.intensity * 3.2; c.setLineDash(near.intensity > 0.7 ? [] : [5, 4]);
-      if (near.intensity) { c.shadowColor = stroke; c.shadowBlur = 2 + near.intensity * 8; }
+      c.save(); c.strokeStyle = stroke; c.lineWidth = 1.2; c.setLineDash(near.intensity > 0.7 ? [] : [5, 4]);
       c.beginPath(); c.moveTo(left, yy); c.lineTo(w - right + 2, yy); c.stroke(); c.setLineDash([]);
-      if (near.intensity) { c.lineWidth = 1 + near.intensity * 2; c.beginPath(); c.moveTo(w - right + 4, y(live)); c.lineTo(w - right + 4, yy); c.stroke(); c.beginPath(); c.arc(w - right + 4, yy, 2.5 + near.intensity * 2, 0, Math.PI * 2); c.fillStyle = stroke; c.fill(); }
+      if (near.intensity) { c.lineWidth = 1.2; c.beginPath(); c.moveTo(w - right + 4, y(live)); c.lineTo(w - right + 4, yy); c.stroke(); c.beginPath(); c.arc(w - right + 4, yy, 2.5 + near.intensity * 2, 0, Math.PI * 2); c.fillStyle = stroke; c.fill(); }
       c.restore(); c.fillStyle = stroke; c.textAlign = 'left'; c.fillText(order.label, order.xLabel, Math.max(top + 5, Math.min(top + ph - 5, yy - 5)));
     });
-    var ly = y(live); c.strokeStyle = accent; c.lineWidth = 1.7; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.setLineDash([]); c.fillStyle = accent; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillText(format(live), w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
+    var ly = y(live); c.strokeStyle = accent; c.lineWidth = 1.2; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.setLineDash([]); c.fillStyle = accent; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillText(format(live), w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
     c.font = '10px system-ui,sans-serif'; c.fillStyle = muted; c.textAlign = 'center'; var every = Math.max(1, Math.floor(visible.length / 5));
     visible.forEach(function (q, i) { if (i % every === 0 || i === visible.length - 1) { var dt = new Date(q.time * 1000), label = state.interval === '1d' ? new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', timeZone: 'America/Bogota' }).format(dt) : new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }).format(dt); c.fillText(label, x(i), h - 10); } }); c.fillStyle = ink;
   }
