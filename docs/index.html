@@ -136,6 +136,24 @@ th { font-family: var(--font-body); font-size: 12px; color: var(--muted); font-w
 th:first-child, td:first-child { text-align: left; }
 footer { color: var(--muted); font-size: 13px; }
 @media (prefers-reduced-motion: no-preference) { .big strong { transition: color .2s; } }
+.order-panel { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); }
+.order-panel h3 { margin: 0 0 6px; font-size: 14px; color: var(--ink); }
+.order-panel p { margin: 6px 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.op-modes, .op-actions, .op-fields { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; margin-top: 10px; }
+.op-modes label, .op-fields label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+.op-actions button, .op-fields button { font: inherit; font-size: 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+.op-actions button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.op-actions button:disabled { opacity: .55; cursor: wait; }
+.order-panel details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 9px; }
+.order-panel summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.op-fields input { width: min(100%, 260px); font: inherit; font-size: 12px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 7px; }
+.op-status { display: block; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.op-log { max-height: 210px; overflow: auto; margin: 8px 0 0; padding-left: 24px; font: 11px/1.5 var(--font-num); color: var(--ink); }
+.op-log li { padding: 2px 0; overflow-wrap: anywhere; }
+.op-log .error { color: var(--loss); }
+.op-log .ok { color: var(--gain); }
+.op-log .sim { color: var(--muted); }
+#dca-real-send[hidden] { display: none; }
 </style>
 
 <div class="wrap">
@@ -261,6 +279,33 @@ footer { color: var(--muted); font-size: 13px; }
     <button id="lpbtn" type="button" class="btn ghost">Usar el precio en vivo</button>
     <div class="table-scroll" id="zchart"></div>
     <div id="eout"></div>
+    <section class="order-panel" id="dca-binance-order-panel" aria-labelledby="dca-binance-order-title">
+      <h3 id="dca-binance-order-title">Órdenes LIMIT · Binance Spot USDTCOP</h3>
+      <p>La escalera proyectada no cambia. La ejecución coloca las compras al menos 20 COP bajo el precio vivo y las ventas desde 2 COP sobre él; conserva la separación y los montos calculados. La simulación no envía órdenes.</p>
+      <div class="op-modes">
+        <label><input id="dca-controlled-mode" type="checkbox" checked> MODO CONTROLADO (simula, no envía)</label>
+        <label><input id="dca-real-mode" type="checkbox"> Habilitar envío REAL</label>
+        <span id="dca-mode-status" class="op-status" role="status" aria-live="polite">Modo controlado activo.</span>
+      </div>
+      <div class="op-actions">
+        <button id="dca-simulate" class="primary" type="button">Simular escalera</button>
+        <button id="dca-real-send" class="primary" type="button" hidden>Enviar órdenes LIMIT reales</button>
+        <button id="dca-cancel-open" type="button">Cancelar abiertas de esta calculadora</button>
+        <button id="dca-test-connection" type="button">Probar conexión</button>
+      </div>
+      <details>
+        <summary>Configurar llaves de Binance en este navegador</summary>
+        <div class="op-fields">
+          <label for="dca-api-key">API Key <input id="dca-api-key" type="password" autocomplete="off" spellcheck="false"></label>
+          <label for="dca-api-secret">API Secret <input id="dca-api-secret" type="password" autocomplete="new-password" spellcheck="false"></label>
+          <button id="dca-save-keys" type="button">Guardar en este navegador</button>
+          <button id="dca-clear-keys" type="button">Borrar llaves</button>
+        </div>
+        <p>Las llaves se guardan solo en localStorage de este navegador (sin cifrar) y no se incluyen en el HTML. GitHub Pages no puede leer los secretos de GitHub Actions. Usa una clave Spot con permisos mínimos, sin retiros; no la cargues en un equipo compartido.</p>
+      </details>
+      <span id="dca-order-status" class="op-status" role="status" aria-live="polite">La página se inicia siempre en modo controlado.</span>
+      <ol id="dca-order-log" class="op-log" role="log" aria-label="Registro de simulaciones, órdenes y errores"></ol>
+    </section>
     <p class="znote">Las compras salen del precio de referencia hacia abajo y cada venta es su compra más tu desviación. El precio en vivo viene de Binance (se actualiza cada 20 s); si no carga, escríbelo a mano. El historial son velas diarias de Investing.com del 09/09 al 09/10/2026.</p>
   </section>
 
@@ -284,11 +329,11 @@ footer { color: var(--muted); font-size: 13px; }
     return '<section id="binance-live-candle-chart" aria-label="Velas en vivo USDT/COP" style="width:100%;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><strong style="font-size:14px;color:var(--ink)">Velas en vivo · Binance Spot USDT/COP</strong>' +
       '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)">Temporalidad <select id="binance-candle-timeframe" aria-label="Temporalidad del gráfico" style="font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px">' +
-      '<option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option></select></label></div>' +
+      '<option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="2h">2h</option><option value="3h">3h</option><option value="4h">4h</option><option value="1d">1d</option></select></label></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px"><div id="binance-candle-status" role="status" style="font-size:12px;color:var(--muted)">Cargando velas…</div><button id="binance-candle-follow" type="button" hidden aria-label="Volver a seguir el precio en vivo" style="font:inherit;font-size:11px;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:5px;padding:4px 8px;cursor:pointer">Seguir</button></div>' +
       '<div style="width:100%;height:260px;min-width:0"><canvas id="binance-candle-canvas" aria-label="Velas japonesas con precio y órdenes proyectadas. Arrastrar para desplazar; rueda o pellizco para zoom." style="display:block;width:100%;height:100%;touch-action:none;cursor:grab"></canvas></div>' +
       '<div id="binance-order-distances" role="list" aria-label="Distancia de cada orden proyectada al precio en vivo" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;font-size:11px"></div>' +
-      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)"><span><i style="display:inline-block;width:15px;border-top:2px solid #29B6F6;vertical-align:middle;margin-right:5px"></i>Precio en vivo</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-buy);vertical-align:middle;margin-right:5px"></i>Compras proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-sell);vertical-align:middle;margin-right:5px"></i>Ventas proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px solid #fb8c00;vertical-align:middle;margin-right:5px"></i>Orden cercana</span></div></section>';
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)"><span><i style="display:inline-block;width:15px;border-top:2px solid #29B6F6;vertical-align:middle;margin-right:5px"></i>Precio en vivo</span><span><i style="display:inline-block;width:15px;border-top:2px dashed #16a34a;vertical-align:middle;margin-right:5px"></i>Compras proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px dashed #e53935;vertical-align:middle;margin-right:5px"></i>Ventas proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px solid #fb8c00;vertical-align:middle;margin-right:5px"></i>Orden cercana</span></div></section>';
   };
 
   function status(text) { state.status = text; var el = document.getElementById('binance-candle-status'); if (el) el.textContent = text; }
@@ -301,7 +346,17 @@ footer { color: var(--muted); font-size: 13px; }
     return attempt();
   }
   function parse(row) { return { time: Math.floor(Number(row[0]) / 1000), open: Number(row[1]), high: Number(row[2]), low: Number(row[3]), close: Number(row[4]) }; }
+  function aggregate3h(rows) {
+    var intervalMs = 3 * 60 * 60 * 1000, groups = Object.create(null);
+    rows.forEach(function (row) {
+      var candle = parse(row), bucketMs = Math.floor(candle.time * 1000 / intervalMs) * intervalMs, key = String(bucketMs), current = groups[key];
+      if (!current) groups[key] = { time: bucketMs / 1000, open: candle.open, high: candle.high, low: candle.low, close: candle.close, lastTime: candle.time };
+      else { current.high = Math.max(current.high, candle.high); current.low = Math.min(current.low, candle.low); if (candle.time >= current.lastTime) { current.close = candle.close; current.lastTime = candle.time; } }
+    });
+    return Object.keys(groups).map(function (key) { var candle = groups[key]; delete candle.lastTime; return candle; }).sort(function (a, b) { return a.time - b.time; });
+  }
   function fetchCandles(tf, limit) {
+    if (tf === '3h') return fetchBinance(klinesPath('1h', Math.min(1000, limit * 3))).then(function (rows) { return aggregate3h(rows).slice(-limit); });
     return fetchBinance(klinesPath(tf, limit)).then(function (rows) { return rows.map(parse); });
   }
 
@@ -376,17 +431,17 @@ footer { color: var(--muted); font-size: 13px; }
       c.fillStyle = ink; c.textAlign = 'left'; c.fillText('' + (i + 1), px + 5, (yb + ys) / 2);
     });
     var orders = [];
-    state.buys.forEach(function (v, i) { if (Number.isFinite(v)) orders.push({ price: v, label: 'C' + (i + 1), color: buy, xLabel: left + 3 }); });
-    state.sells.forEach(function (v, i) { if (Number.isFinite(v)) orders.push({ price: v, label: 'V' + (i + 1), color: sell, xLabel: left + 20 }); });
+    state.buys.forEach(function (v, i) { if (Number.isFinite(v)) orders.push({ price: v, label: 'C' + (i + 1), color: buy, lineColor: '#16a34a', xLabel: left + 3 }); });
+    state.sells.forEach(function (v, i) { if (Number.isFinite(v)) orders.push({ price: v, label: 'V' + (i + 1), color: sell, lineColor: '#e53935', xLabel: left + 20 }); });
     orders.sort(function (a, b) { return proximity(distancePct(a.price, live)).intensity - proximity(distancePct(b.price, live)).intensity; });
     orders.forEach(function (order) {
       var yy = y(order.price), near = proximity(distancePct(order.price, live)), stroke = near.color || order.color;
-      c.save(); c.strokeStyle = stroke; c.lineWidth = 1.2; c.setLineDash(near.intensity > 0.7 ? [] : [5, 4]);
+      c.save(); c.strokeStyle = order.lineColor; c.lineWidth = 1.2; c.setLineDash(near.intensity > 0.7 ? [] : [5, 4]);
       c.beginPath(); c.moveTo(left, yy); c.lineTo(w - right + 2, yy); c.stroke(); c.setLineDash([]);
-      if (near.intensity) { c.lineWidth = 1.2; c.beginPath(); c.moveTo(w - right + 4, y(live)); c.lineTo(w - right + 4, yy); c.stroke(); c.beginPath(); c.arc(w - right + 4, yy, 2.5 + near.intensity * 2, 0, Math.PI * 2); c.fillStyle = stroke; c.fill(); }
+      if (near.intensity) { c.strokeStyle = stroke; c.lineWidth = 1.2; c.beginPath(); c.moveTo(w - right + 4, y(live)); c.lineTo(w - right + 4, yy); c.stroke(); c.beginPath(); c.arc(w - right + 4, yy, 2.5 + near.intensity * 2, 0, Math.PI * 2); c.fillStyle = stroke; c.fill(); }
       c.restore(); c.fillStyle = stroke; c.textAlign = 'left'; c.fillText(order.label, order.xLabel, Math.max(top + 5, Math.min(top + ph - 5, yy - 5)));
     });
-    var ly = y(live); c.strokeStyle = liveBlue; c.lineWidth = 1.2; c.setLineDash([]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.fillStyle = liveBlue; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillStyle = liveBlue; c.fillText(format(live) + ' COP', w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
+    var ly = y(live); c.strokeStyle = liveBlue; c.lineWidth = 1.5; c.setLineDash([]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.fillStyle = liveBlue; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillStyle = liveBlue; c.fillText(format(live) + ' COP', w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
     c.font = '10px system-ui,sans-serif'; c.fillStyle = muted; c.textAlign = 'center'; var every = Math.max(1, Math.floor(visible.length / 5));
     visible.forEach(function (q, i) { if (i % every === 0 || i === visible.length - 1) { var dt = new Date(q.time * 1000), label = state.interval === '1d' ? new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', timeZone: 'America/Bogota' }).format(dt) : new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }).format(dt); c.fillText(label, x(i), h - 10); } }); c.fillStyle = ink;
   }
@@ -635,8 +690,8 @@ footer { color: var(--muted); font-size: 13px; }
     var tx = function (s, x, yy, c, a) { return '<text class="zlab" style="fill:' + c + ';font-size:10px" x="' + x + '" y="' + yy + '"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + s + '</text>'; };
     var o = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Velas diarias de USDT/COP con las parejas de compra y venta y el precio en vivo">';
     for (var t = Math.ceil(yMin / step) * step; t <= yMax; t += step) o += '<line class="zg" x1="' + ml + '" x2="' + X2 + '" y1="' + y(t) + '" y2="' + y(t) + '"/><text class="zt" x="' + (ml - 6) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + N(0).format(t) + '</text>';
-    bp.forEach(function (v) { o += hl(v, 'var(--zone-buy)', '4 3', 1); });
-    sp.forEach(function (v) { o += hl(v, 'var(--zone-sell)', '4 3', 1); });
+    bp.forEach(function (v) { o += hl(v, '#16a34a', '4 3', 1); });
+    sp.forEach(function (v) { o += hl(v, '#e53935', '4 3', 1); });
     sel.forEach(function (r, i) {
       var cx = ml + slot * (i + 0.5), cls = r[4] >= r[1] ? 'cu' : 'cd', top = y(Math.max(r[1], r[4])), bot = y(Math.min(r[1], r[4]));
       o += '<line class="' + cls + ' cw" x1="' + cx + '" x2="' + cx + '" y1="' + y(r[2]) + '" y2="' + y(r[3]) + '"/><rect class="' + cls + ' cb" x="' + (cx - bw / 2) + '" y="' + top + '" width="' + bw + '" height="' + Math.max(1.5, bot - top) + '"/>';
@@ -653,7 +708,7 @@ footer { color: var(--muted); font-size: 13px; }
     }
     o += tx('Precio ' + N(0).format(ref), X2 - 6, y(ref) - 5, 'var(--accent)', 'end');
     var sw = function (c) { return '<i style="display:inline-block;width:14px;height:2px;background:' + c + ';vertical-align:middle"></i> '; };
-    return o + '</svg><div class="znote" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px"><span>' + sw('var(--accent)') + 'Precio en vivo</span><span>' + sw('var(--zone-buy)') + 'Compras (C)</span><span>' + sw('var(--zone-sell)') + 'Ventas (V) = compra + ' + N(3).format(d * 100) + ' %</span></div>';
+    return o + '</svg><div class="znote" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px"><span>' + sw('var(--accent)') + 'Precio en vivo</span><span>' + sw('#16a34a') + 'Compras (C)</span><span>' + sw('#e53935') + 'Ventas (V) = compra + ' + N(3).format(d * 100) + ' %</span></div>';
   }
 
   // Prueba histórica: cada día se ponen las mismas órdenes a la misma distancia del cierre anterior que hoy del precio
@@ -677,7 +732,7 @@ footer { color: var(--muted); font-size: 13px; }
     var pc = parseFloat($('pc').value) || 0, pv = parseFloat($('pv').value) || 0, d = pc > 0 ? (pv - pc) / pc : 0;
     var fb = (parseFloat($('fb').value) || 0) / 100, fs = (parseFloat($('fs').value) || 0) / 100, gmf = $('gmf').checked;
     $('zamp').value = d > 0 ? '+' + N(3).format(d * 100) : '—';
-    if (ref <= 0 || d <= 0 || cap <= 0) { $('zchart').innerHTML = ''; out.innerHTML = '<div class="chk bad">Necesitas un precio de referencia, dinero a invertir y un precio de venta mayor al de compra (arriba) para armar las parejas.</div>'; return; }
+    if (ref <= 0 || d <= 0 || cap <= 0) { window.__calculatorBinanceOrderPlan = { referencePrice: ref, pairs: [] }; if (window.updateBinanceExecutionPlan) window.updateBinanceExecutionPlan(window.__calculatorBinanceOrderPlan); $('zchart').innerHTML = ''; out.innerHTML = '<div class="chk bad">Necesitas un precio de referencia, dinero a invertir y un precio de venta mayor al de compra (arriba) para armar las parejas.</div>'; return; }
     var nW = parseInt($('zwin').value, 10), sel = nW > 0 ? DATA.slice(-nW) : DATA, bp = [], i;
     for (i = 0; i < n; i++) { var v = Math.round(ref - off - i * step); if (v > 0) bp.push(v); }
     n = bp.length;
@@ -689,6 +744,8 @@ footer { color: var(--muted); font-size: 13px; }
     window.updateBinanceLiveCandleOrders(bp, sp, ref);
 
     var per = cap / n, tg = 0, tf = 0, tn = 0, cg = 0, cf = 0, bh = '', sh = '', badB = 0, badS = 0;
+    window.__calculatorBinanceOrderPlan = { symbol: 'USDTCOP', referencePrice: ref, capCOP: cap, buyFeeRate: fb, pairs: bp.map(function (p, k) { var gross = per / p; return { index: k + 1, buyPrice: p, sellPrice: sp[k], quoteBudgetCOP: per, buyGrossUSDT: gross, sellNetUSDT: gross * (1 - fb) }; }) };
+    if (window.updateBinanceExecutionPlan) window.updateBinanceExecutionPlan(window.__calculatorBinanceOrderPlan);
     bp.forEach(function (p, k) {
       var g = per / p, f = g * fb, q = g - f, c = q * sp[k], fc = c * fs, b1 = g < 2 - 1e-9, b2 = c < 4000;
       if (b1) badB++; if (b2) badS++;
@@ -788,6 +845,276 @@ footer { color: var(--muted); font-size: 13px; }
 
   updatePrice();
   setInterval(updatePrice, 20000);
+})();
+</script>
+<script>
+(function () {
+  'use strict';
+  var SYMBOL = 'USDTCOP', PREFIX = 'dcaweb_', API_HOST = 'https://api.binance.com', DATA_HOST = 'https://data-api.binance.vision';
+  var KEY_STORE = 'dca_usdtcop_binance_api_key', SECRET_STORE = 'dca_usdtcop_binance_api_secret';
+  var ACK_REAL = 'REAL USDTCOP', ACK_CANCEL = 'CANCELAR DCACOP';
+  var realArmed = false, busy = false, serverOffset = 0, orderSequence = 0;
+  var $ = function (id) { return document.getElementById(id); };
+  var keyField = $('dca-api-key'), secretField = $('dca-api-secret'), realSwitch = $('dca-real-mode'), controlledSwitch = $('dca-controlled-mode');
+  var number = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 8 });
+
+  function message(text) { $('dca-order-status').textContent = text; }
+  function modeMessage(text) { $('dca-mode-status').textContent = text; }
+  function log(kind, text) {
+    var list = $('dca-order-log'), item = document.createElement('li'), time = new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Bogota' }).format(new Date());
+    item.className = kind; item.textContent = time + ' · ' + text; list.prepend(item);
+    while (list.children.length > 60) list.removeChild(list.lastChild);
+  }
+  function fmt(value) { return number.format(Number(value)); }
+  function readCredentials() {
+    try { return { key: localStorage.getItem(KEY_STORE) || '', secret: localStorage.getItem(SECRET_STORE) || '' }; }
+    catch (e) { throw new Error('El navegador bloqueó localStorage; no se guardaron ni enviaron llaves.'); }
+  }
+  function requireCredentials() {
+    var credentials = readCredentials();
+    if (!credentials.key || !credentials.secret) throw new Error('Guarda tu API Key y API Secret en la sección de configuración.');
+    return credentials;
+  }
+  function saveKeys() {
+    var key = keyField.value.trim(), secret = secretField.value.trim();
+    if (!key || !secret) { message('Escribe ambos campos antes de guardar.'); return; }
+    try {
+      localStorage.setItem(KEY_STORE, key); localStorage.setItem(SECRET_STORE, secret);
+      keyField.value = ''; secretField.value = '';
+      message('Llaves guardadas solo en localStorage de este navegador. No se muestran en el registro.');
+      log('ok', 'Credenciales guardadas localmente; valores ocultos.');
+    } catch (e) { message('No se pudieron guardar las llaves en localStorage.'); log('error', 'El navegador rechazó el almacenamiento local.'); }
+  }
+  function clearKeys() {
+    try { localStorage.removeItem(KEY_STORE); localStorage.removeItem(SECRET_STORE); } catch (e) {}
+    keyField.value = ''; secretField.value = ''; disarmReal();
+    message('Llaves borradas de localStorage en este navegador.'); log('ok', 'Credenciales locales eliminadas.');
+  }
+  function apiError(response, data) {
+    var code = data && data.code !== undefined ? ' código ' + data.code : '';
+    var msg = data && typeof data.msg === 'string' ? data.msg : 'respuesta HTTP no válida';
+    throw new Error('Binance HTTP ' + response.status + code + ': ' + msg);
+  }
+  async function publicGet(path) {
+    var response;
+    try { response = await fetch(DATA_HOST + path, { cache: 'no-store' }); }
+    catch (e) { throw new Error('Sin acceso al endpoint público de Binance (red/CORS). No se envió ninguna orden.'); }
+    var data = await response.json().catch(function () { return null; });
+    if (!response.ok) apiError(response, data);
+    return data;
+  }
+  async function syncServerTime() {
+    var result = await publicGet('/api/v3/time');
+    serverOffset = Number(result.serverTime) - Date.now();
+    if (!Number.isFinite(serverOffset)) throw new Error('Binance devolvió una hora de servidor no válida.');
+  }
+  async function signQuery(values, secret) {
+    if (!window.crypto || !window.crypto.subtle) throw new Error('Este navegador no permite HMAC seguro. Abre la página publicada por HTTPS.');
+    var params = new URLSearchParams();
+    Object.keys(values).forEach(function (key) { params.set(key, String(values[key])); });
+    params.set('timestamp', String(Math.round(Date.now() + serverOffset)));
+    params.set('recvWindow', '5000');
+    var query = params.toString(), encoder = new TextEncoder();
+    var cryptoKey = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    var signed = await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(query));
+    var bytes = new Uint8Array(signed), hex = '';
+    for (var i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, '0');
+    return query + '&signature=' + hex;
+  }
+  async function signedRequest(method, path, values, credentials) {
+    var query = await signQuery(values || {}, credentials.secret), response;
+    try {
+      response = await fetch(API_HOST + path + '?' + query, { method: method, headers: { 'X-MBX-APIKEY': credentials.key }, cache: 'no-store' });
+    } catch (e) {
+      var network = new Error('Sin respuesta de la API privada (red/CORS/región). Si era una orden, el resultado es incierto; no se reintentó.');
+      network.uncertain = method === 'POST' || method === 'DELETE'; throw network;
+    }
+    var data = await response.json().catch(function () { return null; });
+    if (!response.ok) apiError(response, data);
+    return data;
+  }
+  function checkAccount(account) {
+    if (account && account.canTrade === false) throw new Error('La API Key no tiene permiso Spot de trading (canTrade=false).');
+    if (account && Array.isArray(account.permissions) && account.permissions.indexOf('SPOT') < 0) throw new Error('La API Key no declara permiso SPOT.');
+  }
+  async function testConnection() {
+    if (busy) return; setBusy(true);
+    try {
+      var credentials = requireCredentials(); await syncServerTime();
+      var account = await signedRequest('GET', '/api/v3/account', {}, credentials); checkAccount(account);
+      message('Binance aceptó las credenciales y la lectura de cuenta. No se enviaron órdenes.');
+      log('ok', 'Conexión autenticada y cuenta Spot leída; no se envió ninguna orden.');
+    } catch (e) { message(e.message); log('error', e.message); }
+    finally { setBusy(false); }
+  }
+  function getCalculatorPlan() {
+    var plan = window.__calculatorBinanceOrderPlan;
+    if (!plan || plan.symbol !== SYMBOL || !Array.isArray(plan.pairs) || !plan.pairs.length || !(Number(plan.referencePrice) > 0)) throw new Error('No hay una escalera válida. Revisa precio, inversión y desviación de venta en la calculadora.');
+    return plan;
+  }
+  function projectOrders(plan, live, tickText, stepText) {
+    var tick = Number(tickText), step = Number(stepText);
+    if (!(tick > 0) || !(step > 0)) throw new Error('Binance devolvió filtros de precio o cantidad no válidos.');
+    function precision(text) { var part = String(text).split('.')[1] || ''; return Math.min(part.length, 8); }
+    function roundTo(value, unitText, mode) {
+      var unit = Number(unitText), rounded = mode === 'floor' ? Math.floor(value / unit + 1e-10) * unit : Math.ceil(value / unit - 1e-10) * unit;
+      return Number(rounded.toFixed(precision(unitText)));
+    }
+    var delta = live - Number(plan.referencePrice), pairs = plan.pairs;
+    var highestBuy = Math.max.apply(null, pairs.map(function (pair) { return Number(pair.buyPrice) + delta; }));
+    var lowestSell = Math.min.apply(null, pairs.map(function (pair) { return Number(pair.sellPrice) + delta; }));
+    var buyFloor = roundTo(live - 20, tickText, 'floor'), sellFloor = roundTo(live + 2, tickText, 'ceil');
+    var buyShift = Math.min(0, buyFloor - highestBuy), sellShift = Math.max(0, sellFloor - lowestSell);
+    return pairs.map(function (pair) {
+      var buyPrice = roundTo(Number(pair.buyPrice) + delta + buyShift, tickText, 'floor');
+      var sellPrice = roundTo(Number(pair.sellPrice) + delta + sellShift, tickText, 'ceil');
+      var gross = Number(pair.quoteBudgetCOP) / buyPrice, net = gross * (1 - Number(plan.buyFeeRate));
+      return { index: pair.index, buyPrice: buyPrice, sellPrice: sellPrice, buyQty: roundTo(gross, stepText, 'floor'), sellQty: roundTo(net, stepText, 'floor'), quoteBudgetCOP: Number(pair.quoteBudgetCOP) };
+    });
+  }
+  function filtersFrom(symbol) {
+    var find = function (type) { return symbol.filters.find(function (filter) { return filter.filterType === type; }); };
+    var price = find('PRICE_FILTER'), lot = find('LOT_SIZE'), notional = find('NOTIONAL') || find('MIN_NOTIONAL');
+    if (!price || !lot || !notional) throw new Error('Faltan filtros PRICE_FILTER, LOT_SIZE o NOTIONAL en exchangeInfo.');
+    return { price: price, lot: lot, notional: notional, bySide: find('PERCENT_PRICE_BY_SIDE') };
+  }
+  function checkOrders(orders, filters, averagePrice) {
+    var tick = Number(filters.price.tickSize), step = Number(filters.lot.stepSize), minQty = Number(filters.lot.minQty), maxQty = Number(filters.lot.maxQty);
+    var minPrice = Number(filters.price.minPrice), maxPrice = Number(filters.price.maxPrice), minNotional = Number(filters.notional.minNotional || filters.notional.notional || 0);
+    var maxNotional = Number(filters.notional.maxNotional || 0), bids = [], asks = [];
+    orders.forEach(function (order) {
+      var notional = order.price * order.qty;
+      if (order.price < minPrice || order.price > maxPrice || Math.abs(order.price / tick - Math.round(order.price / tick)) > 1e-8) throw new Error(order.side + ' #' + order.index + ': precio fuera de PRICE_FILTER/tickSize.');
+      if (order.qty < minQty || order.qty > maxQty || Math.abs(order.qty / step - Math.round(order.qty / step)) > 1e-8) throw new Error(order.side + ' #' + order.index + ': cantidad fuera de LOT_SIZE/stepSize.');
+      if (notional + 1e-8 < minNotional || (maxNotional > 0 && notional > maxNotional)) throw new Error(order.side + ' #' + order.index + ': notional fuera del filtro NOTIONAL de Binance.');
+      if (order.side === 'BUY') bids.push(order.price); else asks.push(order.price);
+      if (filters.bySide && averagePrice > 0) {
+        var f = filters.bySide, min = order.side === 'BUY' ? Number(f.bidMultiplierDown) : Number(f.askMultiplierDown), max = order.side === 'BUY' ? Number(f.bidMultiplierUp) : Number(f.askMultiplierUp);
+        if (order.price < averagePrice * min || order.price > averagePrice * max) throw new Error(order.side + ' #' + order.index + ': precio fuera de PERCENT_PRICE_BY_SIDE de Binance.');
+      }
+    });
+    if (bids.length && asks.length && Math.min.apply(null, asks) <= Math.max.apply(null, bids)) throw new Error('La escalera LIMIT cruza precios de compra y venta; no se envió ninguna orden.');
+  }
+  function balance(account, asset) {
+    var entry = (account.balances || []).find(function (item) { return item.asset === asset; });
+    return entry ? Number(entry.free) || 0 : 0;
+  }
+  function responseSummary(response) {
+    return 'Binance respondió: orderId=' + response.orderId + ', clientOrderId=' + response.clientOrderId + ', estado=' + response.status + ', precio=' + response.price + ', cantidad=' + response.origQty + ', ejecutada=' + response.executedQty + ' USDT.';
+  }
+  function makeClientId() {
+    orderSequence++; return PREFIX + Date.now().toString(36) + '_' + orderSequence.toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  }
+  function setBusy(value) {
+    busy = value;
+    ['dca-simulate', 'dca-real-send', 'dca-cancel-open', 'dca-test-connection', 'dca-real-mode', 'dca-controlled-mode', 'dca-save-keys', 'dca-clear-keys'].forEach(function (id) { $(id).disabled = value; });
+  }
+  function simulate() {
+    try {
+      var plan = getCalculatorPlan(), pairs = projectOrders(plan, Number(plan.referencePrice), '1', '0.00000001');
+      pairs.forEach(function (pair) {
+        log('sim', 'SIMULADA · LIMIT BUY #' + pair.index + ' · ' + fmt(pair.buyPrice) + ' COP · ' + fmt(pair.quoteBudgetCOP / pair.buyPrice) + ' USDT brutos · no enviada.');
+        log('sim', 'SIMULADA · LIMIT SELL #' + pair.index + ' · ' + fmt(pair.sellPrice) + ' COP · ' + fmt((pair.quoteBudgetCOP / pair.buyPrice) * (1 - Number(plan.buyFeeRate))) + ' USDT · no enviada.');
+      });
+      message(pairs.length + ' parejas simuladas; sin llamadas de trading ni órdenes reales.');
+    } catch (e) { message(e.message); log('error', e.message); }
+  }
+  async function prepareRealOrders() {
+    var plan = getCalculatorPlan(), liveData = await publicGet('/api/v3/ticker/price?symbol=' + SYMBOL), live = Number(liveData && liveData.price);
+    if (!(live > 0)) throw new Error('Binance no devolvió un precio vivo válido; se canceló la preparación.');
+    var info = await publicGet('/api/v3/exchangeInfo?symbol=' + SYMBOL), symbol = (info.symbols || []).find(function (item) { return item.symbol === SYMBOL; });
+    if (!symbol || symbol.status !== 'TRADING' || symbol.isSpotTradingAllowed !== true || symbol.baseAsset !== 'USDT' || symbol.quoteAsset !== 'COP') throw new Error('USDTCOP no figura habilitado para Spot USDT/COP en exchangeInfo.');
+    var filters = filtersFrom(symbol), average = await publicGet('/api/v3/avgPrice?symbol=' + SYMBOL).catch(function () { return null; });
+    if (filters.bySide && !(Number(average && average.price) > 0)) throw new Error('No se pudo obtener el promedio necesario para validar PERCENT_PRICE_BY_SIDE; no se envió ninguna orden.');
+    var pairs = projectOrders(plan, live, filters.price.tickSize, filters.lot.stepSize), orders = [];
+    pairs.forEach(function (pair) {
+      orders.push({ side: 'BUY', index: pair.index, price: pair.buyPrice, qty: pair.buyQty });
+      orders.push({ side: 'SELL', index: pair.index, price: pair.sellPrice, qty: pair.sellQty });
+    });
+    checkOrders(orders, filters, Number(average && average.price));
+    await syncServerTime();
+    var credentials = requireCredentials(), account = await signedRequest('GET', '/api/v3/account', {}, credentials); checkAccount(account);
+    var copFree = balance(account, symbol.quoteAsset), usdtFree = balance(account, symbol.baseAsset);
+    var copRequired = orders.filter(function (order) { return order.side === 'BUY'; }).reduce(function (sum, order) { return sum + order.price * order.qty; }, 0);
+    var usdtRequired = orders.filter(function (order) { return order.side === 'SELL'; }).reduce(function (sum, order) { return sum + order.qty; }, 0);
+    if (copFree + 1e-8 < copRequired) throw new Error('Saldo COP insuficiente: disponible ' + fmt(copFree) + ', requerido ' + fmt(copRequired) + '. Se bloqueó toda la escalera.');
+    if (usdtFree + 1e-8 < usdtRequired) throw new Error('Saldo USDT insuficiente para las ventas (no se cuentan compras aún no ejecutadas): disponible ' + fmt(usdtFree) + ', requerido ' + fmt(usdtRequired) + '. Se bloqueó toda la escalera.');
+    return { orders: orders, credentials: credentials, live: live, copFree: copFree, usdtFree: usdtFree, copRequired: copRequired, usdtRequired: usdtRequired };
+  }
+  async function sendRealOrders() {
+    if (busy) return;
+    if (!realArmed) { message('El envío real está desarmado; activa el segundo switch con la confirmación explícita.'); return; }
+    if (!window.confirm('Se enviarán órdenes LIMIT GTC reales de USDTCOP, una por una. Revisa precios y saldos. ¿Continuar?')) return;
+    setBusy(true);
+    try {
+      var prepared = await prepareRealOrders();
+      log('ok', 'Prevalidación: precio vivo ' + fmt(prepared.live) + ' COP; COP disponibles/requeridos ' + fmt(prepared.copFree) + '/' + fmt(prepared.copRequired) + '; USDT disponibles/requeridos ' + fmt(prepared.usdtFree) + '/' + fmt(prepared.usdtRequired) + '.');
+      for (var i = 0; i < prepared.orders.length; i++) {
+        var order = prepared.orders[i], clientOrderId = makeClientId();
+        try {
+          var response = await signedRequest('POST', '/api/v3/order', { symbol: SYMBOL, side: order.side, type: 'LIMIT', timeInForce: 'GTC', quantity: String(order.qty), price: String(order.price), newClientOrderId: clientOrderId }, prepared.credentials);
+          log('ok', responseSummary(response));
+        } catch (e) {
+          log('error', order.side + ' #' + order.index + ' · ' + fmt(order.price) + ' COP · ' + fmt(order.qty) + ' USDT: ' + e.message);
+          if (e.uncertain) log('error', 'Resultado indeterminado: verifica las órdenes abiertas en Binance antes de volver a intentarlo. No se reintentó.');
+          message('Ejecución detenida tras el primer error. Consulta el registro; no hubo reintento automático.'); return;
+        }
+      }
+      message(prepared.orders.length + ' órdenes LIMIT aceptadas por Binance. Revisa el registro y las órdenes abiertas.');
+    } catch (e) { message(e.message); log('error', e.message); }
+    finally { setBusy(false); }
+  }
+  async function cancelOpenOrders() {
+    if (busy) return;
+    if (!realArmed) { log('sim', 'Simulación de cancelación: ninguna orden consultada ni cancelada. Activa el modo real para cancelar órdenes dcaweb_.'); message('Modo controlado: no se consultaron ni cancelaron órdenes reales.'); return; }
+    if (!window.confirm('Se consultarán las órdenes abiertas USDTCOP creadas por esta calculadora (clientOrderId dcaweb_). Las demás no se tocarán. ¿Continuar?')) return;
+    if (window.prompt('Escribe ' + ACK_CANCEL + ' para confirmar') !== ACK_CANCEL) { message('Cancelación real no confirmada.'); return; }
+    setBusy(true);
+    try {
+      var credentials = requireCredentials(); await syncServerTime();
+      var open = await signedRequest('GET', '/api/v3/openOrders', { symbol: SYMBOL }, credentials);
+      var mine = open.filter(function (order) { return typeof order.clientOrderId === 'string' && order.clientOrderId.indexOf(PREFIX) === 0; });
+      if (!mine.length) { message('No hay órdenes abiertas de esta calculadora.'); log('ok', 'Binance informó cero órdenes abiertas con prefijo ' + PREFIX + '.'); return; }
+      for (var i = 0; i < mine.length; i++) {
+        var order = mine[i];
+        try {
+          var result = await signedRequest('DELETE', '/api/v3/order', { symbol: SYMBOL, origClientOrderId: order.clientOrderId }, credentials);
+          log('ok', 'Cancelada · clientOrderId=' + result.clientOrderId + ' · estado=' + result.status + ' · orderId=' + result.orderId + '.');
+        } catch (e) { log('error', 'No se pudo confirmar la cancelación de ' + order.clientOrderId + ': ' + e.message); if (e.uncertain) log('error', 'Resultado de cancelación indeterminado; no se reintentó.'); break; }
+      }
+      message('Cancelación procesada; revisa el registro y el estado en Binance.');
+    } catch (e) { message(e.message); log('error', e.message); }
+    finally { setBusy(false); }
+  }
+  function disarmReal() {
+    realArmed = false; realSwitch.checked = false; controlledSwitch.checked = true;
+    $('dca-simulate').hidden = false; $('dca-real-send').hidden = true;
+    modeMessage('Modo controlado activo; no se envían órdenes.');
+  }
+  $('dca-save-keys').addEventListener('click', saveKeys);
+  $('dca-clear-keys').addEventListener('click', clearKeys);
+  $('dca-simulate').addEventListener('click', simulate);
+  $('dca-real-send').addEventListener('click', sendRealOrders);
+  $('dca-cancel-open').addEventListener('click', cancelOpenOrders);
+  $('dca-test-connection').addEventListener('click', testConnection);
+  controlledSwitch.addEventListener('change', function () { if (controlledSwitch.checked) { disarmReal(); message('Modo controlado activo.'); } else if (!realArmed) { controlledSwitch.checked = true; modeMessage('Para habilitar órdenes reales, usa el segundo switch y confirma.'); } });
+  realSwitch.addEventListener('change', function () {
+    if (!realSwitch.checked) { disarmReal(); message('Modo controlado activo; no se envían órdenes.'); return; }
+    try { requireCredentials(); }
+    catch (e) { realSwitch.checked = false; modeMessage(e.message); message(e.message); return; }
+    if (!window.confirm('Activar envío real de órdenes LIMIT Spot USDTCOP. La siguiente acción de envío requiere otra confirmación. ¿Continuar?') || window.prompt('Escribe ' + ACK_REAL + ' para habilitar el modo real') !== ACK_REAL) {
+      realSwitch.checked = false; modeMessage('No se activó el modo real.'); message('Confirmación incompleta; la página sigue en modo controlado.'); return;
+    }
+    realArmed = true; controlledSwitch.checked = false;
+    $('dca-simulate').hidden = true; $('dca-real-send').hidden = false;
+    modeMessage('Modo REAL armado temporalmente. Cada lote pide confirmación; recargar vuelve al modo controlado.');
+    message('Modo real armado. Verifica las credenciales con “Probar conexión” antes de enviar.');
+    log('error', 'Modo REAL armado por confirmación explícita; no se envió ninguna orden.');
+  });
+  window.updateBinanceExecutionPlan = function (plan) {
+    if (!plan || !Array.isArray(plan.pairs) || !plan.pairs.length) message('No hay una escalera válida para simular o enviar.');
+  };
+  $('dca-order-log').replaceChildren();
 })();
 </script>
 
