@@ -1,6 +1,24 @@
 {
-  "updated_at": "2026-10-19T17:03:57+00:00",
+  "updated_at": "2026-10-19T17:19:30+00:00",
   "entries": [
+    {
+      "timestamp": "2026-10-19T17:19:30+00:00",
+      "finished_at": "2026-10-19T17:19:30+00:00",
+      "run_id": "39293121099",
+      "status": "error",
+      "order_received": {
+        "precio": "3100",
+        "lado": "buy"
+      },
+      "proxy": {
+        "used": null,
+        "attempts": [],
+        "note": "Conexión directa del runner; no se utilizó proxy ni se intentó eludir restricciones regionales."
+      },
+      "requests": [],
+      "final_response": null,
+      "error": "cantidad USDT debe ser un número válido"
+    },
     {
       "timestamp": "2026-10-19T17:03:55+00:00",
       "finished_at": "2026-10-19T17:03:57+00:00",
