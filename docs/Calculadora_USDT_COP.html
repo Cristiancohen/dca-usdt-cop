@@ -297,7 +297,7 @@ footer { color: var(--muted); font-size: 13px; }
       </div>
       <section class="op-individual" aria-labelledby="dca-individual-title">
         <h3 id="dca-individual-title">PRUEBA INDIVIDUAL · una orden</h3>
-        <p>Independiente de la escalera. Elige lado, precio COP y cantidad USDT; en modo real se validan filtros y saldo y se envía como máximo una orden LIMIT.</p>
+        <p>Independiente de la escalera. Elige lado, precio COP y cantidad USDT. Al confirmar, esta página avisa al bot de GitHub; el bot valida y envía una orden LIMIT a Binance con las llaves guardadas en Actions Secrets. El resultado queda en la pestaña Actions del repositorio.</p>
         <div class="op-fields">
           <label for="dca-individual-side">Lado
             <select id="dca-individual-side"><option value="BUY">Compra</option><option value="SELL">Venta</option></select>
@@ -311,18 +311,27 @@ footer { color: var(--muted); font-size: 13px; }
         </div>
         <div class="op-actions">
           <button id="dca-individual-simulate" type="button">Simular orden individual</button>
-          <button id="dca-individual-send" class="primary" type="button" hidden>Enviar UNA orden LIMIT real</button>
+          <button id="dca-individual-send" class="primary" type="button">Enviar UNA orden LIMIT al bot</button>
         </div>
+        <details>
+          <summary>Configurar Token de GitHub para la prueba individual</summary>
+          <div class="op-fields">
+            <label for="dca-github-token">Token de GitHub <input id="dca-github-token" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"></label>
+            <button id="dca-save-github-token" type="button">Guardar token en este navegador</button>
+            <button id="dca-clear-github-token" type="button">Borrar token</button>
+          </div>
+          <p>Crea un Fine-grained personal access token en GitHub → Settings → Developer settings → Personal access tokens, limitado al repositorio <code>Cristiancohen/dca-usdt-cop</code> y con permiso <strong>Contents: Read and write</strong> (necesario para repository_dispatch). Pega el token aquí una vez: se guarda solo en localStorage de este navegador, sin cifrar; nunca se incluye en el HTML ni en el repositorio. No uses un equipo compartido y revócalo desde GitHub si dejas de usarlo.</p>
+        </details>
       </section>
       <details>
-        <summary>Configurar llaves de Binance en este navegador</summary>
+        <summary>Llaves de Binance en este navegador (solo escalera y cancelación)</summary>
         <div class="op-fields">
           <label for="dca-api-key">API Key <input id="dca-api-key" type="password" autocomplete="off" spellcheck="false"></label>
           <label for="dca-api-secret">API Secret <input id="dca-api-secret" type="password" autocomplete="new-password" spellcheck="false"></label>
           <button id="dca-save-keys" type="button">Guardar en este navegador</button>
           <button id="dca-clear-keys" type="button">Borrar llaves</button>
         </div>
-        <p>Las llaves se guardan solo en localStorage de este navegador (sin cifrar) y no se incluyen en el HTML. GitHub Pages no puede leer los secretos de GitHub Actions. Usa una clave Spot con permisos mínimos, sin retiros; no la cargues en un equipo compartido.</p>
+        <p>Estas llaves se usan solo para las funciones existentes de la escalera/cancelación desde este navegador; la prueba individual no las lee ni las envía. Se guardan en localStorage sin cifrar. La orden individual llega a Actions y usa los secretos BINANCE_API_KEY y BINANCE_API_SECRET del repositorio. Usa una clave Spot con permisos mínimos y sin retiros; no cargues secretos en un equipo compartido.</p>
       </details>
       <span id="dca-order-status" class="op-status" role="status" aria-live="polite">La página se inicia siempre en modo controlado.</span>
       <ol id="dca-order-log" class="op-log" role="log" aria-label="Registro de simulaciones, órdenes y errores"></ol>
@@ -872,11 +881,11 @@ footer { color: var(--muted); font-size: 13px; }
 (function () {
   'use strict';
   var SYMBOL = 'USDTCOP', PREFIX = 'dcaweb_', API_HOST = 'https://api.binance.com', DATA_HOST = 'https://data-api.binance.vision';
-  var KEY_STORE = 'dca_usdtcop_binance_api_key', SECRET_STORE = 'dca_usdtcop_binance_api_secret';
+  var KEY_STORE = 'dca_usdtcop_binance_api_key', SECRET_STORE = 'dca_usdtcop_binance_api_secret', GITHUB_TOKEN_STORE = 'dca_usdtcop_github_pat';
   var ACK_REAL = 'REAL USDTCOP', ACK_CANCEL = 'CANCELAR DCACOP';
   var realArmed = false, busy = false, serverOffset = 0, orderSequence = 0;
   var $ = function (id) { return document.getElementById(id); };
-  var keyField = $('dca-api-key'), secretField = $('dca-api-secret'), realSwitch = $('dca-real-mode'), controlledSwitch = $('dca-controlled-mode');
+  var keyField = $('dca-api-key'), secretField = $('dca-api-secret'), githubTokenField = $('dca-github-token'), realSwitch = $('dca-real-mode'), controlledSwitch = $('dca-controlled-mode');
   var number = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 8 });
 
   function message(text) { $('dca-order-status').textContent = text; }
@@ -910,6 +919,24 @@ footer { color: var(--muted); font-size: 13px; }
     try { localStorage.removeItem(KEY_STORE); localStorage.removeItem(SECRET_STORE); } catch (e) {}
     keyField.value = ''; secretField.value = ''; disarmReal();
     message('Llaves borradas de localStorage en este navegador.'); log('ok', 'Credenciales locales eliminadas.');
+  }
+  function saveGitHubToken() {
+    var token = githubTokenField.value.trim();
+    if (!token) { message('Pega el Token de GitHub antes de guardarlo.'); return; }
+    if (!/^github_pat_[A-Za-z0-9_]+$/.test(token) && !/^ghp_[A-Za-z0-9]+$/.test(token)) { message('El token no parece un Fine-grained PAT (github_pat_…) ni un PAT clásico (ghp_…).'); return; }
+    try {
+      localStorage.setItem(GITHUB_TOKEN_STORE, token); githubTokenField.value = '';
+      message('Token de GitHub guardado solo en localStorage de este navegador.'); log('ok', 'Token de GitHub guardado localmente; no se muestra en el registro.');
+    } catch (e) { message('No se pudo guardar el Token de GitHub en localStorage.'); log('error', 'El navegador rechazó el almacenamiento local del token.'); }
+  }
+  function clearGitHubToken() {
+    try { localStorage.removeItem(GITHUB_TOKEN_STORE); } catch (e) {}
+    githubTokenField.value = '';
+    message('Token de GitHub borrado de localStorage en este navegador.'); log('ok', 'Token de GitHub eliminado del almacenamiento local.');
+  }
+  function readGitHubToken() {
+    try { return localStorage.getItem(GITHUB_TOKEN_STORE) || ''; }
+    catch (e) { throw new Error('El navegador bloqueó localStorage; no se leyó el Token de GitHub.'); }
   }
   function apiError(response, data) {
     var code = data && data.code !== undefined ? ' código ' + data.code : '';
@@ -1028,7 +1055,7 @@ footer { color: var(--muted); font-size: 13px; }
   }
   function setBusy(value) {
     busy = value;
-    ['dca-simulate', 'dca-real-send', 'dca-individual-simulate', 'dca-individual-send', 'dca-individual-side', 'dca-individual-price', 'dca-individual-qty', 'dca-cancel-open', 'dca-test-connection', 'dca-real-mode', 'dca-controlled-mode', 'dca-save-keys', 'dca-clear-keys'].forEach(function (id) { $(id).disabled = value; });
+    ['dca-simulate', 'dca-real-send', 'dca-individual-simulate', 'dca-individual-send', 'dca-individual-side', 'dca-individual-price', 'dca-individual-qty', 'dca-cancel-open', 'dca-test-connection', 'dca-real-mode', 'dca-controlled-mode', 'dca-save-keys', 'dca-clear-keys', 'dca-github-token', 'dca-save-github-token', 'dca-clear-github-token'].forEach(function (id) { $(id).disabled = value; });
   }
   function simulate() {
     try {
@@ -1055,47 +1082,44 @@ footer { color: var(--muted); font-size: 13px; }
       message('Orden individual simulada; sin llamadas de trading ni orden real.');
     } catch (e) { message(e.message); log('error', e.message); }
   }
-  async function prepareIndividualOrder() {
-    var order = readIndividualOrder(), liveData = await publicGet('/api/v3/ticker/price?symbol=' + SYMBOL), live = Number(liveData && liveData.price);
-    if (!(live > 0)) throw new Error('Binance no devolvió un precio vivo válido; se canceló la preparación.');
-    if (order.side === 'BUY' && order.price >= live) throw new Error('La compra debe quedar por debajo del precio vivo (' + fmt(live) + ' COP); se conserva el precio que escribiste.');
-    if (order.side === 'SELL' && order.price <= live) throw new Error('La venta debe quedar por encima del precio vivo (' + fmt(live) + ' COP); se conserva el precio que escribiste.');
-    var info = await publicGet('/api/v3/exchangeInfo?symbol=' + SYMBOL), symbol = (info.symbols || []).find(function (item) { return item.symbol === SYMBOL; });
-    if (!symbol || symbol.status !== 'TRADING' || symbol.isSpotTradingAllowed !== true || symbol.baseAsset !== 'USDT' || symbol.quoteAsset !== 'COP') throw new Error('USDTCOP no figura habilitado para Spot USDT/COP en exchangeInfo.');
-    var filters = filtersFrom(symbol), average = await publicGet('/api/v3/avgPrice?symbol=' + SYMBOL).catch(function () { return null; });
-    if (filters.bySide && !(Number(average && average.price) > 0)) throw new Error('No se pudo obtener el promedio necesario para validar PERCENT_PRICE_BY_SIDE; no se envió ninguna orden.');
-    checkOrders([Object.assign({ index: 1 }, order)], filters, Number(average && average.price));
-    await syncServerTime();
-    var credentials = requireCredentials(), account = await signedRequest('GET', '/api/v3/account', {}, credentials); checkAccount(account);
-    var availableCOP = balance(account, 'COP'), availableUSDT = balance(account, 'USDT');
-    if (order.side === 'BUY' && availableCOP + 1e-8 < order.notional) throw new Error('Saldo COP insuficiente: disponible ' + fmt(availableCOP) + ', requerido ' + fmt(order.notional) + '.');
-    if (order.side === 'SELL' && availableUSDT + 1e-8 < order.qty) throw new Error('Saldo USDT insuficiente: disponible ' + fmt(availableUSDT) + ', requerido ' + fmt(order.qty) + '.');
-    return { order: order, credentials: credentials, live: live, availableCOP: availableCOP, availableUSDT: availableUSDT };
-  }
   async function sendIndividualOrder() {
     if (busy) return;
-    if (!realArmed) { message('El envío real está desarmado; activa el modo REAL con su confirmación explícita.'); return; }
+    var order, token;
+    try { order = readIndividualOrder(); token = readGitHubToken(); }
+    catch (e) { message(e.message); log('error', e.message); return; }
+    if (!token) { message('Guarda tu Token de GitHub en la configuración de la prueba individual antes de enviarla.'); return; }
+    var confirmation = [
+      'Enviar una solicitud para EXACTAMENTE UNA orden LIMIT GTC de USDTCOP?', '',
+      'Lado: ' + (order.side === 'BUY' ? 'COMPRA' : 'VENTA'),
+      'Cantidad: ' + fmt(order.qty) + ' USDT',
+      'Precio límite: ' + fmt(order.price) + ' COP',
+      'Notional aproximado: ' + fmt(order.notional) + ' COP', '',
+      'El bot de GitHub validará saldo y filtros y luego intentará enviar la orden real a Binance. No se enviará la escalera.'
+    ].join(String.fromCharCode(10));
+    if (!window.confirm(confirmation)) { message('Solicitud cancelada; no se avisó al bot.'); log('sim', 'Solicitud de orden individual cancelada en la confirmación.'); return; }
     setBusy(true);
-    message('Validando precio, filtros y saldo de una orden individual; la escalera no se enviará.');
+    message('Enviando solicitud al bot de GitHub; todavía no confirma una orden de Binance.');
     try {
-      var prepared = await prepareIndividualOrder(), order = prepared.order;
-      var confirmation = [
-        'Enviar EXACTAMENTE UNA orden LIMIT GTC real de USDTCOP?', '',
-        'Lado: ' + (order.side === 'BUY' ? 'COMPRA' : 'VENTA'),
-        'Cantidad: ' + fmt(order.qty) + ' USDT',
-        'Precio límite: ' + fmt(order.price) + ' COP',
-        'Notional: ' + fmt(order.notional) + ' COP',
-        'Precio vivo consultado: ' + fmt(prepared.live) + ' COP', '',
-        'No se enviará la escalera.'
-      ].join(String.fromCharCode(10));
-      if (!window.confirm(confirmation)) { message('Envío individual cancelado; no se envió ninguna orden.'); log('sim', 'Envío individual cancelado en la confirmación final; no enviada.'); return; }
-      var clientOrderId = makeClientId(), response = await signedRequest('POST', '/api/v3/order', { symbol: SYMBOL, side: order.side, type: 'LIMIT', timeInForce: 'GTC', quantity: String(order.qty), price: String(order.price), newClientOrderId: clientOrderId }, prepared.credentials);
-      log('ok', 'Orden individual LIMIT ' + order.side + ' aceptada · ' + responseSummary(response));
-      message('Binance aceptó una orden LIMIT individual. No se envió la escalera; revisa el registro y las órdenes abiertas.');
-    } catch (e) {
-      message(e.message); log('error', e.message);
-      if (e.uncertain) log('error', 'Resultado de la orden individual indeterminado: verifica Binance antes de actuar de nuevo. No se reintentó.');
-    } finally { setBusy(false); }
+      var payload = { event_type: 'manual-order', client_payload: { precio: order.price, lado: order.side === 'BUY' ? 'buy' : 'sell', cantidad: order.qty, timestamp: new Date().toISOString() } };
+      var response;
+      try {
+        response = await fetch('https://api.github.com/repos/Cristiancohen/dca-usdt-cop/dispatches', {
+          method: 'POST', cache: 'no-store',
+          headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + token, 'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (networkError) {
+        throw new Error('No se pudo confirmar la respuesta de GitHub (red/CORS). Revisa Actions antes de volver a enviarla; la solicitud podría haber llegado.');
+      }
+      if (!response.ok) {
+        var detail = await response.text().catch(function () { return ''; });
+        if (response.status === 401 || response.status === 403) throw new Error('GitHub rechazó el token o sus permisos (HTTP ' + response.status + '). Revisa el PAT y su acceso al repositorio.');
+        throw new Error('GitHub rechazó el evento manual-order (HTTP ' + response.status + ')' + (detail ? ': ' + detail.slice(0, 180) : '') + '.');
+      }
+      log('ok', 'GitHub recibió el evento manual-order · ' + (order.side === 'BUY' ? 'COMPRA' : 'VENTA') + ' · ' + fmt(order.qty) + ' USDT a ' + fmt(order.price) + ' COP. Falta el resultado del bot en Actions.');
+      message('GitHub recibió la solicitud (HTTP ' + response.status + '). La orden aún no está confirmada: revisa la pestaña Actions del repositorio para ver el resultado del bot.');
+    } catch (e) { message(e.message); log('error', e.message); }
+    finally { setBusy(false); }
   }
   async function prepareRealOrders() {
     var plan = getCalculatorPlan(), liveData = await publicGet('/api/v3/ticker/price?symbol=' + SYMBOL), live = Number(liveData && liveData.price);
@@ -1167,11 +1191,12 @@ footer { color: var(--muted); font-size: 13px; }
   function disarmReal() {
     realArmed = false; realSwitch.checked = false; controlledSwitch.checked = true;
     $('dca-simulate').hidden = false; $('dca-real-send').hidden = true;
-    $('dca-individual-simulate').hidden = false; $('dca-individual-send').hidden = true;
     modeMessage('Modo controlado activo; no se envían órdenes.');
   }
   $('dca-save-keys').addEventListener('click', saveKeys);
   $('dca-clear-keys').addEventListener('click', clearKeys);
+  $('dca-save-github-token').addEventListener('click', saveGitHubToken);
+  $('dca-clear-github-token').addEventListener('click', clearGitHubToken);
   $('dca-simulate').addEventListener('click', simulate);
   $('dca-real-send').addEventListener('click', sendRealOrders);
   $('dca-individual-simulate').addEventListener('click', simulateIndividualOrder);
@@ -1188,8 +1213,7 @@ footer { color: var(--muted); font-size: 13px; }
     }
     realArmed = true; controlledSwitch.checked = false;
     $('dca-simulate').hidden = true; $('dca-real-send').hidden = false;
-    $('dca-individual-simulate').hidden = true; $('dca-individual-send').hidden = false;
-    modeMessage('Modo REAL armado temporalmente. Cada envío pide confirmación; recargar vuelve al modo controlado.');
+    modeMessage('Modo REAL armado temporalmente para la escalera. El envío individual usa por separado el Token de GitHub y su propia confirmación; recargar vuelve al modo controlado.');
     message('Modo real armado. Verifica las credenciales con “Probar conexión” antes de enviar.');
     log('error', 'Modo REAL armado por confirmación explícita; no se envió ninguna orden.');
   });
