@@ -1,44 +1,639 @@
-<!doctype html>
-<html lang="es">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#101a26">
-  <title>Órdenes USDT/COP · DCA</title>
-  <style>
-    :root{color-scheme:light;--ink:#162432;--muted:#60717e;--line:#d9e2e7;--paper:#f3f7f8;--panel:#fff;--navy:#101a26;--mint:#087c6d;--mint-bg:#dff4ed;--rose:#a44843;--rose-bg:#fae9e6;--blue:#315f84;--gold:#765a1f;--gold-bg:#f6f0da}
-    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}header{background:var(--navy);color:#f4f8fa;padding:28px max(22px,calc((100vw - 1120px)/2)) 30px;border-bottom:4px solid #60d0b5}.head{max-width:1120px;margin:auto;display:flex;justify-content:space-between;align-items:end;gap:24px}.title{margin:0;font-size:clamp(25px,4vw,37px);letter-spacing:-.035em;font-weight:680}.sub{margin:5px 0 0;color:#bbcad3;font-size:14px}.pair{font-variant-numeric:tabular-nums;color:#a5ead7;font-size:15px;font-weight:650;white-space:nowrap}.wrap{max-width:1120px;margin:30px auto;padding:0 22px}.topline{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:15px}.topline h2{font-size:20px;margin:0;letter-spacing:-.02em}.updated{font-size:13px;color:var(--muted);text-align:right}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:760px}th{background:#eaf0f2;color:#495b68;text-align:left;font-weight:620;font-size:12px;padding:12px 16px;white-space:nowrap}td{padding:15px 16px;border-top:1px solid #e7edef;font-size:14px;white-space:nowrap;font-variant-numeric:tabular-nums}tbody tr:hover{background:#f8fbfb}.side{font-weight:700}.buy{color:var(--mint)}.sell{color:var(--rose)}.status{display:inline-block;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:650;background:#edf1f2;color:#44525b}.status-new{background:var(--gold-bg);color:var(--gold)}.status-done{background:var(--mint-bg);color:#066653}.status-cancel{background:var(--rose-bg);color:#8f3b35}.empty{padding:36px 22px;text-align:center;color:var(--muted)}.empty strong{display:block;color:var(--ink);font-size:16px;margin-bottom:5px}.foot{margin:14px 2px;color:var(--muted);font-size:12px}.error{color:#913c36}.refresh{border:1px solid #49616e;background:transparent;color:#f3f7f8;border-radius:7px;padding:8px 11px;font:inherit;font-size:13px;cursor:pointer}.refresh:hover{background:#223443}.refresh:focus-visible{outline:3px solid #7de0c3;outline-offset:2px}footer{max-width:1120px;margin:28px auto;padding:18px 22px 30px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.95em}@media(max-width:650px){header{padding:23px 18px 24px}.head{align-items:flex-start;flex-direction:column;gap:10px}.wrap{padding:0 14px;margin:22px auto}.topline{align-items:flex-start;flex-direction:column}.updated{text-align:left}.panel{border-radius:10px}.table-wrap{overflow:visible}table,tbody{display:block;min-width:0}thead{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}tbody{padding:0 13px}tr{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:14px 1px;border-top:1px solid #e7edef}tr:first-child{border-top:0}td{padding:0;border:0;white-space:normal;font-size:13px}td::before{display:block;content:attr(data-label);color:var(--muted);font-size:11px;margin-bottom:2px}td:first-child{grid-column:1 / -1}.empty{padding:28px 16px}footer{margin-top:20px;padding:16px 16px 26px}}
-  </style>
-</head>
-<body>
-<header><div class="head"><div><h1 class="title">Órdenes USDT/COP</h1><p class="sub">Órdenes LIMIT enviadas por el bot y confirmadas por Binance</p></div><div class="pair">Binance Spot&nbsp; / &nbsp;USDT → COP</div></div></header>
-<main class="wrap">
-  <div class="topline"><h2>Actividad reciente</h2><div class="updated" id="updated">Consultando el último registro…</div></div>
-  <section class="panel" aria-label="Órdenes del bot"><div class="table-wrap" id="content"><div class="empty">Cargando órdenes desde el registro de Binance…</div></div></section>
-  <p class="foot">Precio y cantidad son los valores límite enviados. El monto es precio × cantidad. Las órdenes abiertas pueden cambiar de estado cuando Binance las ejecute o cancele.</p>
-</main>
-<footer>Actualización automática desde el historial de órdenes de Binance. No se muestran claves ni saldos. Los registros de esta página son públicos.</footer>
-<script>
-const fmt = (value, digits=2) => { const n=Number(value); return Number.isFinite(n) ? new Intl.NumberFormat('es-CO',{minimumFractionDigits:0,maximumFractionDigits:digits}).format(n) : '—'; };
-const dateFmt = value => { const d=new Date(value); return Number.isNaN(d.getTime())?'—':new Intl.DateTimeFormat('es-CO',{dateStyle:'short',timeStyle:'short',timeZone:'UTC'}).format(d)+' UTC'; };
-function statusClass(status){if(status==='FILLED')return 'status status-done';if(status==='NEW'||status==='PARTIALLY_FILLED')return 'status status-new';if(status==='CANCELED'||status==='REJECTED'||status==='EXPIRED')return 'status status-cancel';return 'status';}
-function escapeHtml(value){return String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');}
-function cell(label, value, cls=''){return `<td data-label="${label}" class="${cls}">${value}</td>`;}
-async function load(){
- const target=document.getElementById('content'), updated=document.getElementById('updated');
- try{
-  const response=await fetch(`orders.json?t=${Date.now()}`,{cache:'no-store'});if(!response.ok)throw new Error(`HTTP ${response.status}`);
-  const data=await response.json();const orders=Array.isArray(data.orders)?data.orders:[];
-  updated.textContent=data.updatedAt?`Datos consultados: ${dateFmt(data.updatedAt)}`:'Aún no hay una consulta del exchange';
-  if(!orders.length){target.innerHTML='<div class="empty"><strong>Aún no hay órdenes del bot</strong>Cuando el bot envíe órdenes LIMIT a Binance, aparecerán aquí.</div>';return;}
-  target.innerHTML=`<table><thead><tr><th>Tipo</th><th>Precio límite (COP)</th><th>Cantidad (USDT)</th><th>Monto (COP)</th><th>Estado</th><th>Hora</th><th>Order ID</th></tr></thead><tbody>${orders.map(o=>{
-   const buy=o.side==='BUY';const statusText=o.statusEs||o.status||'Desconocido';
-   const sideHtml='<span class="side '+(buy?'buy':'sell')+'">'+(buy?'Compra':'Venta')+'</span>';
-   return '<tr>'+cell('Lado',sideHtml)+cell('Precio límite',fmt(o.price))+cell('Cantidad',fmt(o.quantity,8))+cell('Monto total',fmt(o.total))+cell('Estado','<span class="'+statusClass(o.status)+'">'+escapeHtml(statusText)+'</span>')+cell('Hora',dateFmt(o.time))+cell('Order ID','<code>'+escapeHtml(o.orderId||'')+'</code>')+'</tr>';
-  }).join('')}</tbody></table>`;
- }catch(error){updated.textContent='No fue posible consultar el registro';target.innerHTML=`<div class="empty error"><strong>Error al cargar las órdenes</strong>${String(error.message||error)}</div>`;}
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Calculadora USDT/COP</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: dos ciclos en paralelo (compra COP→USDT, venta USDT→COP), unidos por una franja de resultado debajo. */
+:root {
+  --bg: #eef1f0;
+  --surface: #fbfcfb;
+  --ink: #14211e;
+  --muted: #5b6b66;
+  --line: #d3dbd8;
+  --accent: #0d6b5c;
+  --accent-soft: #dcefea;
+  --gain: #0d6b5c;
+  --loss: #b3372b;
+  --warn: #8a5a00;
+  --zone-buy: #0d6b5c;
+  --zone-sell: #9a5f00;
+  --font-body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
-load();setInterval(load,60000);
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1a17; --surface: #16241f; --ink: #e6efec; --muted: #94a8a1; --line: #2a3d37;
+    --accent: #4fc3ac; --accent-soft: #1b3a33; --gain: #5fd4ba; --loss: #f08a7e; --warn: #e3b25a; --zone-buy: #4fc3ac; --zone-sell: #e3b25a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1a17; --surface: #16241f; --ink: #e6efec; --muted: #94a8a1; --line: #2a3d37;
+  --accent: #4fc3ac; --accent-soft: #1b3a33; --gain: #5fd4ba; --loss: #f08a7e; --warn: #e3b25a; --zone-buy: #4fc3ac; --zone-sell: #e3b25a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.45;
+  padding-block: 28px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header h1 { margin: 0; font-size: clamp(24px, 4vw, 32px); font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 62ch; }
+.cycles { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .cycles { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card h2 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.card h2 span { color: var(--accent); font-family: var(--font-num); text-transform: none; letter-spacing: 0; }
+.fields { display: grid; gap: 12px; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.input { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); }
+.input:focus-within { border-color: var(--accent); outline: 2px solid var(--accent-soft); }
+.input input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font-family: var(--font-num); font-size: 16px; padding: 10px 12px; outline: none; font-variant-numeric: tabular-nums; }
+.input input[readonly] { color: var(--muted); cursor: default; }
+.input input[readonly].pos { color: var(--gain); }
+.input input[readonly].neg { color: var(--loss); }
+.input .unit { padding-right: 12px; color: var(--muted); font-family: var(--font-num); font-size: 13px; }
+.rows { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--line); }
+.row:last-child { border-bottom: 0; }
+.row dt { color: var(--muted); }
+.row dd { margin: 0; font-family: var(--font-num); font-variant-numeric: tabular-nums; text-align: right; }
+.row.total dt { color: var(--ink); font-weight: 600; }
+.row.total dd { font-weight: 600; font-size: 17px; color: var(--accent); }
+.opt { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--muted); }
+.opt input[type="checkbox"] { margin-top: 2px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+.opt label { cursor: pointer; }
+.opt .mini { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
+.opt .mini input[type="number"] { width: 54px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 5px; padding: 3px 6px; font-family: var(--font-num); }
+.chk { font-size: 13px; padding: 8px 10px; border-radius: 7px; background: var(--accent-soft); color: var(--ink); }
+.chk.bad { background: transparent; border: 1px solid var(--loss); color: var(--loss); }
+.be { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 10px; padding: 18px 20px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.be small { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.be strong { font-family: var(--font-num); font-size: clamp(40px, 10vw, 68px); font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; color: var(--accent); display: flex; align-items: baseline; flex-wrap: wrap; column-gap: 12px; }
+.be strong em { font-family: var(--font-body); font-style: normal; font-size: 15px; font-weight: 500; letter-spacing: 0; color: var(--muted); }
+.be p { margin: 0; color: var(--ink); }
+.be .be-exact { font-family: var(--font-num); font-size: 13px; color: var(--muted); }
+.zctl { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .zctl { grid-template-columns: 1fr; } }
+select, textarea { width: 100%; font-family: var(--font-body); font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 9px 10px; }
+textarea { font-family: var(--font-num); resize: vertical; }
+select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); border-color: var(--accent); }
+.zboxes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .zboxes { grid-template-columns: 1fr; } }
+.zbox { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.zbox small { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+.zbox strong { font-family: var(--font-num); font-size: clamp(18px, 4vw, 24px); font-weight: 600; font-variant-numeric: tabular-nums; }
+.zbox span { font-size: 13px; color: var(--muted); }
+.zbox.buy { border-color: var(--zone-buy); } .zbox.buy small, .zbox.buy strong { color: var(--zone-buy); }
+.zbox.sell { border-color: var(--zone-sell); } .zbox.sell small, .zbox.sell strong { color: var(--zone-sell); }
+#zchart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.zg { stroke: var(--line); stroke-width: 1; fill: none; }
+.zt { fill: var(--muted); font-size: 11px; font-family: var(--font-num); }
+.zbb { fill: var(--zone-buy); fill-opacity: .16; stroke: none; }
+.zsb { fill: var(--zone-sell); fill-opacity: .16; stroke: none; }
+.zlab { font-size: 12px; font-weight: 600; font-family: var(--font-body); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; stroke-linejoin: round; }
+.zlab.b { fill: var(--zone-buy); } .zlab.s { fill: var(--zone-sell); }
+.cu { stroke: var(--gain); fill: var(--gain); } .cd { stroke: var(--loss); fill: var(--loss); }
+.cw { stroke-width: 1.4; } .cb { stroke-width: 1; }
+.btn { align-self: flex-start; font-family: var(--font-body); font-size: 14px; font-weight: 600; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 7px; padding: 9px 14px; cursor: pointer; }
+.btn:hover { background: var(--accent); color: var(--surface); }
+.btn.ghost { background: transparent; border-color: var(--line); color: var(--muted); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.zdata { border-top: 1px solid var(--line); padding-top: 12px; }
+.zdata summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.zdata[open] summary { margin-bottom: 12px; }
+.zform { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; align-items: end; margin-bottom: 12px; }
+.zform .btn { grid-column: 1 / -1; }
+@media (max-width: 600px) { .zform { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.zrow-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.zlist { max-height: 260px; overflow-y: auto; margin-top: 10px; }
+.zdel { background: transparent; border: 1px solid var(--line); color: var(--muted); border-radius: 5px; padding: 2px 8px; cursor: pointer; font-family: var(--font-body); }
+.zdel:hover { color: var(--loss); border-color: var(--loss); }
+.znote { margin: 0; font-size: 13px; color: var(--muted); }
+.flow { text-align: center; color: var(--muted); font-size: 13px; letter-spacing: 0.04em; }
+.result { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.result .head { padding: 18px; display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: end; }
+@media (max-width: 720px) { .result .head { grid-template-columns: 1fr 1fr; } .result .head .big { grid-column: 1 / -1; } }
+.big small, .stat small { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; margin-bottom: 4px; }
+.big strong { font-family: var(--font-num); font-size: clamp(30px, 6vw, 44px); font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat strong { font-family: var(--font-num); font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.pos { color: var(--gain); } .neg { color: var(--loss); }
+.result .detail { border-top: 1px solid var(--line); padding: 6px 18px 14px; display: grid; grid-template-columns: 1fr 1fr; column-gap: 32px; }
+@media (max-width: 720px) { .result .detail { grid-template-columns: 1fr; } }
+.verdict { padding: 11px 18px; font-size: 14px; background: var(--accent-soft); border-top: 1px solid var(--line); }
+.verdict.bad { background: transparent; color: var(--loss); }
+.verdict.warn { color: var(--warn); }
+.scale { padding: 16px 18px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.scale h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-family: var(--font-num); font-size: 14px; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px dashed var(--line); white-space: nowrap; }
+th { font-family: var(--font-body); font-size: 12px; color: var(--muted); font-weight: 600; border-bottom: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+footer { color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: no-preference) { .big strong { transition: color .2s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Calculadora USDT/COP</h1>
+    <p>Compras USDT con pesos, los vendes a otro precio y ves cuánto queda. Las comisiones se descuentan en cada ciclo con el saldo real, sin redondear.</p>
+  </header>
+
+  <section aria-label="Precio de mercado USDT/COP en Binance Spot" style="background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <span style="font-size:12px;color:var(--muted);font-weight:600">Binance Spot · USDT/COP</span>
+      <strong id="binance-usdtcop-price" style="font-family:var(--font-num);font-size:18px;color:var(--accent)">Consultando…</strong>
+    </div>
+    <span id="binance-usdtcop-updated" style="font-size:12px;color:var(--muted)">Última actualización: —</span>
+  </section>
+
+  <section class="be" aria-labelledby="t-be">
+    <small id="t-be">Precio de equilibrio</small>
+    <strong><span id="be-big"></span><em>COP por USDT</em></strong>
+    <p>Redondeado hacia arriba a pesos enteros: vendiendo a este precio o más siempre sales en ganancia.</p>
+    <span class="be-exact" id="be-exact"></span>
+  </section>
+
+  <div class="cycles">
+    <section class="card" aria-labelledby="t-compra">
+      <h2 id="t-compra">Ciclo de compra <span>COP → USDT</span></h2>
+      <div class="fields">
+        <div class="field">
+          <label for="inv">Dinero invertido</label>
+          <div class="input"><input id="inv" type="number" step="any" min="0" value="6360"><span class="unit">COP</span></div>
+        </div>
+        <div class="field">
+          <label for="pc">Precio de compra</label>
+          <div class="input"><input id="pc" type="number" step="any" min="0" value="3180"><span class="unit">COP/USDT</span></div>
+        </div>
+        <div class="field">
+          <label for="fb">Comisión de compra</label>
+          <div class="input"><input id="fb" type="number" value="0.075" readonly tabindex="-1" aria-label="Comisión de compra fija"><span class="unit">%</span></div>
+        </div>
+      </div>
+      <dl class="rows" style="margin:0">
+        <div class="row"><dt>USDT brutos</dt><dd id="o-bruto-usdt"></dd></div>
+        <div class="row"><dt>Comisión</dt><dd id="o-fee-usdt"></dd></div>
+        <div class="row total"><dt>USDT que recibes</dt><dd id="o-neto-usdt"></dd></div>
+      </dl>
+      <div class="row" style="padding:0;border:0"><span class="opt" style="width:100%"><span id="o-pantalla" style="font-family:var(--font-num)"></span></span></div>
+      <div id="chk-buy" class="chk" role="status"></div>
+    </section>
+
+    <section class="card" aria-labelledby="t-venta">
+      <h2 id="t-venta">Ciclo de venta <span>USDT → COP</span></h2>
+      <div class="fields">
+        <div class="field">
+          <label for="qv">USDT que vendes</label>
+          <div class="input"><input id="qv" type="text" readonly tabindex="-1" aria-describedby="qv-nota"><span class="unit">USDT</span></div>
+        </div>
+        <div class="field">
+          <label for="pv">Precio de venta</label>
+          <div class="input"><input id="pv" type="number" step="any" min="0" value="3200"><span class="unit">COP/USDT</span></div>
+        </div>
+        <div class="field">
+          <label for="dev">Desviación de precio (venta − compra)</label>
+          <div class="input"><input id="dev" type="text" readonly tabindex="-1"><span class="unit" id="dev-pct"></span></div>
+        </div>
+        <div class="field">
+          <label for="fs">Comisión de venta</label>
+          <div class="input"><input id="fs" type="number" value="0.075" readonly tabindex="-1" aria-label="Comisión de venta fija"><span class="unit">%</span></div>
+        </div>
+      </div>
+      <dl class="rows" style="margin:0">
+        <div class="row"><dt>COP brutos</dt><dd id="o-bruto-cop"></dd></div>
+        <div class="row"><dt>Comisión</dt><dd id="o-fee-cop"></dd></div>
+        <div class="row total"><dt>COP que recibes</dt><dd id="o-neto-cop"></dd></div>
+      </dl>
+      <div id="chk-sell" class="chk" role="status"></div>
+      <div class="opt" id="qv-nota">
+        <input id="trunc" type="checkbox">
+        <label for="trunc">Vender solo hasta <span class="mini"><input id="dec" type="number" min="0" max="8" step="1" value="3" aria-label="Decimales permitidos"> decimales</span> (queda un resto sin vender)</label>
+      </div>
+      <div class="opt">
+        <input id="gmf" type="checkbox">
+        <label for="gmf">Descontar el 4x1000 al sacar la plata al banco</label>
+      </div>
+    </section>
+  </div>
+
+  <div class="flow" aria-hidden="true">COMPRA + VENTA = SALIDA</div>
+
+  <section class="result" aria-labelledby="t-res">
+    <div class="head">
+      <div class="big">
+        <small id="t-res">Ganancia neta</small>
+        <strong id="r-gan"></strong>
+      </div>
+      <div class="stat"><small>Margen sobre lo invertido</small><strong id="r-margen"></strong></div>
+    </div>
+    <div id="verdict" class="verdict"></div>
+    <dl class="detail" style="margin:0">
+      <div class="row"><dt>Invertiste</dt><dd id="d-inv"></dd></div>
+      <div class="row"><dt>Recibes al final</dt><dd id="d-fin"></dd></div>
+      <div class="row"><dt>Comisiones (compra + venta)</dt><dd id="d-fees"></dd></div>
+      <div class="row"><dt>4x1000</dt><dd id="d-gmf"></dd></div>
+      <div class="row"><dt>USDT sin vender</dt><dd id="d-resto"></dd></div>
+    </dl>
+  </section>
+
+  <section class="card zones" aria-labelledby="t-zonas">
+    <h2 id="t-zonas">Persecución de precio <span>órdenes en parejas compra → venta</span></h2>
+    <div class="zctl">
+      <div class="field"><label for="lp">Precio de referencia (en vivo)</label>
+        <div class="input"><input id="lp" type="number" step="any" min="0"><span class="unit">COP</span></div>
+        <span id="lpst" class="znote"></span></div>
+      <div class="field"><label for="ecap">Dinero a invertir</label><div class="input"><input id="ecap" type="number" step="any" min="0" value="100000"><span class="unit">COP</span></div></div>
+      <div class="field"><label for="enb">Número de parejas</label><div class="input"><input id="enb" type="number" step="1" min="1" max="30" value="5"><span class="unit">órdenes</span></div></div>
+      <div class="field"><label for="eoff">Primera compra: pesos por debajo del precio</label><div class="input"><input id="eoff" type="number" step="any" min="0" value="0"><span class="unit">COP</span></div></div>
+      <div class="field"><label for="est">Separación entre compras</label><div class="input"><input id="est" type="number" step="any" min="1" value="5"><span class="unit">COP</span></div></div>
+      <div class="field"><label for="zamp">Ganancia por pareja (tu desviación venta − compra)</label><div class="input"><input id="zamp" type="text" readonly tabindex="-1"><span class="unit">%</span></div></div>
+      <div class="field"><label for="zwin">Período del gráfico</label>
+        <select id="zwin"><option value="7" selected>Últimos 7 días</option><option value="14">Últimos 14 días</option><option value="30">Últimos 30 días</option><option value="0">Todos los datos</option></select></div>
+      <div class="field"><label for="eh">Plazo para el estudio</label>
+        <select id="eh"><option value="1">1 día</option><option value="3" selected>3 días</option><option value="7">7 días</option></select></div>
+    </div>
+    <button id="lpbtn" type="button" class="btn ghost">Usar el precio en vivo</button>
+    <div class="table-scroll" id="zchart"></div>
+    <div id="eout"></div>
+    <p class="znote">Las compras salen del precio de referencia hacia abajo y cada venta es su compra más tu desviación. El precio en vivo viene de Binance (se actualiza cada 20 s); si no carga, escríbelo a mano. El historial son velas diarias de Investing.com del 09/09 al 09/10/2026.</p>
+  </section>
+
+  <footer>La plataforma muestra los USDT con 3 decimales, pero el saldo real tiene más. La fórmula usa el saldo real: ganancia = USDT × (1 − comisión de compra) × precio de venta × (1 − comisión de venta) − COP invertidos.</footer>
+</div>
+
+<script>
+(function () {
+  var state = window.__binanceCandleState || { interval: '5m', candles: [], buys: [], sells: [], livePrice: null, generation: 0, busy: false, timer: null, status: '' };
+  window.__binanceCandleState = state;
+  var hosts = ['https://api.binance.com', 'https://data-api.binance.vision'];
+  var number = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
+  var format = function (v) { return number.format(v); };
+  var klinesPath = function (tf, limit) { return '/api/v3/klines?symbol=USDTCOP&interval=' + encodeURIComponent(tf) + '&limit=' + limit; };
+
+  window.binanceLiveCandleChartMarkup = function () {
+    return '<section id="binance-live-candle-chart" aria-label="Velas en vivo USDT/COP" style="width:100%;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><strong style="font-size:14px;color:var(--ink)">Velas en vivo · Binance Spot USDT/COP</strong>' +
+      '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)">Temporalidad <select id="binance-candle-timeframe" aria-label="Temporalidad del gráfico" style="font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px">' +
+      '<option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option></select></label></div>' +
+      '<div id="binance-candle-status" role="status" style="font-size:12px;color:var(--muted);margin:0 0 6px">Cargando velas…</div>' +
+      '<div style="width:100%;height:260px;min-width:0"><canvas id="binance-candle-canvas" aria-label="Velas japonesas con precio y órdenes proyectadas" style="display:block;width:100%;height:100%"></canvas></div>' +
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)"><span><i style="display:inline-block;width:15px;border-top:2px solid var(--accent);vertical-align:middle;margin-right:5px"></i>Precio en vivo</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-buy);vertical-align:middle;margin-right:5px"></i>Compras proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-sell);vertical-align:middle;margin-right:5px"></i>Ventas proyectadas</span></div></section>';
+  };
+
+  function status(text) { state.status = text; var el = document.getElementById('binance-candle-status'); if (el) el.textContent = text; }
+  function fetchBinance(path) {
+    var i = 0;
+    function attempt() {
+      if (i >= hosts.length) return Promise.reject(new Error('Sin conexión'));
+      return fetch(hosts[i++] + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).catch(function (e) { return i < hosts.length ? attempt() : Promise.reject(e); });
+    }
+    return attempt();
+  }
+  function parse(row) { return { time: Math.floor(Number(row[0]) / 1000), open: Number(row[1]), high: Number(row[2]), low: Number(row[3]), close: Number(row[4]) }; }
+
+  function draw() {
+    var canvas = document.getElementById('binance-candle-canvas');
+    if (!canvas || !state.candles.length) return;
+    var rect = canvas.getBoundingClientRect(), w = rect.width, h = rect.height;
+    if (w < 100 || h < 80) return;
+    var dpr = Math.max(1, window.devicePixelRatio || 1); canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    var c = canvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var css = getComputedStyle(document.documentElement), color = function (name, fallback) { return css.getPropertyValue(name).trim() || fallback; };
+    var ink = color('--ink', '#14211e'), muted = color('--muted', '#5b6b66'), grid = color('--line', '#d3dbd8'), up = color('--gain', '#0d6b5c'), down = color('--loss', '#b3372b'), buy = color('--zone-buy', '#0d6b5c'), sell = color('--zone-sell', '#9a5f00'), accent = color('--accent', '#0d6b5c');
+    c.clearRect(0, 0, w, h); c.fillStyle = color('--surface', '#fff'); c.fillRect(0, 0, w, h);
+    var left = 8, right = 76, top = 12, bottom = 26, pw = w - left - right, ph = h - top - bottom, vals = [];
+    state.candles.forEach(function (q) { vals.push(q.low, q.high); });
+    state.buys.concat(state.sells).forEach(function (v) { if (Number.isFinite(v)) vals.push(v); });
+    var live = Number.isFinite(state.livePrice) ? state.livePrice : state.candles[state.candles.length - 1].close; vals.push(live);
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = Math.max((hi - lo) * 0.08, 2); lo -= pad; hi += pad;
+    var y = function (v) { return top + (hi - v) / (hi - lo) * ph; }, x = function (i) { return left + (i + 0.5) * pw / state.candles.length; };
+    c.font = '10px system-ui,sans-serif'; c.textBaseline = 'middle';
+    for (var t = 0; t <= 4; t++) { var val = hi - (hi - lo) * t / 4, yy = y(val); c.strokeStyle = grid; c.beginPath(); c.moveTo(left, yy); c.lineTo(w - right + 4, yy); c.stroke(); c.fillStyle = muted; c.textAlign = 'left'; c.fillText(format(val), w - right + 9, yy); }
+    function orderLine(price, label, col, xLabel) { var yy = y(price); c.strokeStyle = col; c.lineWidth = 1; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(left, yy); c.lineTo(w - right + 2, yy); c.stroke(); c.setLineDash([]); c.fillStyle = col; c.textAlign = 'left'; c.fillText(label, xLabel, Math.max(top + 5, Math.min(top + ph - 5, yy - 5))); }
+    state.buys.forEach(function (v, i) { orderLine(v, 'C' + (i + 1), buy, left + 3); });
+    state.sells.forEach(function (v, i) { orderLine(v, 'V' + (i + 1), sell, left + 20); });
+    var slot = pw / state.candles.length, body = Math.max(1.2, Math.min(10, slot * 0.62));
+    state.candles.forEach(function (q, i) { var cx = x(i), yo = y(q.open), yc = y(q.close), co = q.close >= q.open ? up : down; c.strokeStyle = co; c.fillStyle = co; c.lineWidth = Math.max(1, Math.min(1.5, body * 0.2)); c.beginPath(); c.moveTo(cx, y(q.high)); c.lineTo(cx, y(q.low)); c.stroke(); c.fillRect(cx - body / 2, Math.min(yo, yc), body, Math.max(1, Math.abs(yc - yo))); });
+    state.buys.forEach(function (price, i) {
+      if (!Number.isFinite(state.sells[i])) return;
+      var px = state.buys.length === 1 ? left + pw / 2 : left + 40 + (pw - 80) * i / (state.buys.length - 1), yb = y(price), ys = y(state.sells[i]);
+      c.strokeStyle = accent; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, yb); c.lineTo(px, ys); c.stroke();
+      c.fillStyle = buy; c.beginPath(); c.arc(px, yb, 2.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = sell; c.beginPath(); c.moveTo(px - 3.5, ys + 6); c.lineTo(px + 3.5, ys + 6); c.lineTo(px, ys); c.closePath(); c.fill();
+      c.fillStyle = ink; c.textAlign = 'left'; c.fillText('' + (i + 1), px + 5, (yb + ys) / 2);
+    });
+    var ly = y(live); c.strokeStyle = accent; c.lineWidth = 1.7; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.setLineDash([]); c.fillStyle = accent; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillText(format(live), w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
+    c.font = '10px system-ui,sans-serif'; c.fillStyle = muted; c.textAlign = 'center'; var every = Math.max(1, Math.floor(state.candles.length / 5));
+    state.candles.forEach(function (q, i) { if (i % every === 0 || i === state.candles.length - 1) { var dt = new Date(q.time * 1000), label = state.interval === '1d' ? new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', timeZone: 'America/Bogota' }).format(dt) : new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }).format(dt); c.fillText(label, x(i), h - 10); } }); c.fillStyle = ink;
+  }
+
+  async function history() {
+    var token = ++state.generation, tf = state.interval; status('Cargando velas de ' + tf + '…');
+    try { var rows = await fetchBinance(klinesPath(tf, 200)); if (token !== state.generation) return; state.candles = rows.map(parse).filter(function (q) { return Number.isFinite(q.close) && q.close > 0; }).slice(-200); state.livePrice = state.candles.length ? state.candles[state.candles.length - 1].close : null; status('Binance Spot · ' + tf + ' · ' + state.candles.length + ' velas'); draw(); refresh(); }
+    catch (e) { if (token === state.generation) { status('sin conexión'); draw(); } }
+  }
+  async function refresh() {
+    if (!state.candles.length || state.busy) return; state.busy = true; var token = state.generation, tf = state.interval;
+    try { var result = await Promise.all([fetchBinance(klinesPath(tf, 1)), fetchBinance('/api/v3/ticker/price?symbol=USDTCOP').catch(function () { return null; })]); if (token !== state.generation) return;
+      var latest = parse(result[0][result[0].length - 1]), last = state.candles[state.candles.length - 1]; if (latest.time === last.time) state.candles[state.candles.length - 1] = latest; else state.candles = state.candles.concat([latest]).slice(-200);
+      var p = result[1] && Number(result[1].price); state.livePrice = Number.isFinite(p) && p > 0 ? p : latest.close;
+      status('Binance Spot · ' + tf + ' · actualizado ' + new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Bogota' }).format(new Date())); draw();
+    } catch (e) { if (token === state.generation) { status('sin conexión'); draw(); } } finally { state.busy = false; }
+  }
+  window.mountBinanceLiveCandleChart = function () { var select = document.getElementById('binance-candle-timeframe'); if (!select) return; select.value = state.interval; select.onchange = function () { state.interval = select.value; history(); }; if (state.timer === null) state.timer = setInterval(refresh, 12000); if (state.candles.length) { status(state.status || ('Binance Spot · ' + state.interval)); draw(); } else history(); };
+  window.updateBinanceLiveCandleOrders = function (buys, sells, price) { state.buys = buys.slice(); state.sells = sells.slice(); state.projectedPrice = price; draw(); };
+  window.addEventListener('resize', draw);
+})();
 </script>
-</body>
-</html>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var ids = ['inv', 'pc', 'pv', 'dec'];
+  var checks = ['trunc', 'gmf'];
+  var nf = function (d) { return new Intl.NumberFormat('es-CO', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+  var cop = function (v) { return nf(2).format(v) + ' COP'; };
+  var usdt = function (v) { return nf(5).format(v) + ' USDT'; };
+  var pct = function (v) { return nf(3).format(v) + ' %'; };
+  var num = function (id) { var v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : 0; };
+
+  // Cálculo puro de los dos ciclos
+  function calc(p) {
+    var bruto = p.pc > 0 ? p.inv / p.pc : 0;
+    var feeU = bruto * p.fb / 100;
+    var neto = bruto - feeU;
+    var qty = neto;
+    if (p.trunc) { var f = Math.pow(10, p.dec); qty = Math.floor(neto * f + 1e-9) / f; }
+    var brutoCop = qty * p.pv;
+    var feeC = brutoCop * p.fs / 100;
+    var netoCop = brutoCop - feeC;
+    var gmf = p.gmf ? netoCop * 0.004 : 0;
+    var fin = netoCop - gmf;
+    var gan = fin - p.inv;
+    var be = qty > 0 ? p.inv / (qty * (1 - p.fs / 100) * (p.gmf ? 0.996 : 1)) : 0;
+    return { bruto: bruto, feeU: feeU, neto: neto, qty: qty, resto: neto - qty, brutoCop: brutoCop, feeC: feeC, netoCop: netoCop, gmf: gmf, fin: fin, gan: gan, margen: p.inv > 0 ? gan / p.inv * 100 : 0, be: be, feesCop: feeU * p.pc + feeC };
+  }
+
+  function params() {
+    return { inv: num('inv'), pc: num('pc'), fb: num('fb'), pv: num('pv'), fs: num('fs'), dec: Math.min(8, Math.round(num('dec'))), trunc: $('trunc').checked, gmf: $('gmf').checked };
+  }
+
+  function sign(el, v) { el.classList.toggle('pos', v > 0.0000001); el.classList.toggle('neg', v < -0.0000001); }
+
+  function render() {
+    var p = params(), r = calc(p);
+    // Valor mínimo de orden en Binance para USDT/COP: 4.000 COP (aplica a compra y a venta)
+    var MIN = 4000, minUsdt = p.pc > 0 ? MIN / p.pc : 0;
+    var cb = $('chk-buy'), cs = $('chk-sell');
+    var MIN_USDT = 2, minCopB = MIN_USDT * p.pc;
+    var okB = p.pc > 0 && p.inv / p.pc >= MIN_USDT - 1e-9, okS = r.brutoCop >= MIN;
+    cb.className = 'chk' + (okB ? '' : ' bad');
+    cb.textContent = okB ? 'Cumple tu orden mínima de ' + MIN_USDT + ' USDT.' : 'Tu orden mínima es de ' + MIN_USDT + ' USDT: a este precio necesitas invertir al menos ' + cop(minCopB) + '.';
+    cs.className = 'chk' + (okS ? '' : ' bad');
+    cs.textContent = okS ? 'La orden vale ' + cop(r.brutoCop) + ' y cumple el mínimo de ' + nf(0).format(MIN) + ' COP.' : 'Binance rechaza esta venta: vale ' + cop(r.brutoCop) + ' y el mínimo es ' + nf(0).format(MIN) + ' COP.';
+
+    $('o-bruto-usdt').textContent = usdt(r.bruto);
+    $('o-fee-usdt').textContent = '− ' + usdt(r.feeU);
+    $('o-neto-usdt').textContent = usdt(r.neto);
+    $('o-pantalla').textContent = 'En pantalla: ' + nf(3).format(Math.floor(r.neto * 1000 + 1e-9) / 1000) + ' USDT';
+    $('qv').value = nf(5).format(r.qty);
+    $('o-bruto-cop').textContent = cop(r.brutoCop);
+    $('o-fee-cop').textContent = '− ' + cop(r.feeC);
+    $('o-neto-cop').textContent = cop(r.netoCop);
+
+    $('r-gan').textContent = (r.gan > 0 ? '+ ' : r.gan < 0 ? '− ' : '') + cop(Math.abs(r.gan));
+    sign($('r-gan'), r.gan);
+    $('r-margen').textContent = pct(r.margen);
+    sign($('r-margen'), r.margen);
+    var beR = r.be > 0 ? Math.floor(r.be + 1e-9) + 1 : 0;
+    $('be-big').textContent = beR > 0 ? nf(0).format(beR) : '—';
+    $('be-exact').textContent = r.be > 0 ? 'Equilibrio exacto: ' + nf(4).format(r.be) + ' COP (ahí quedas en cero)' : '';
+
+    $('d-inv').textContent = cop(p.inv);
+    $('d-fin').textContent = cop(r.fin);
+    var dif = p.pv - p.pc, difPct = p.pc > 0 ? dif / p.pc * 100 : 0;
+    $('dev').value = (dif > 0 ? '+' : '') + nf(2).format(dif);
+    $('dev-pct').textContent = (difPct > 0 ? '+' : '') + nf(3).format(difPct) + ' %';
+    $('dev').classList.toggle('pos', dif > 0.0000001);
+    $('dev').classList.toggle('neg', dif < -0.0000001);
+    $('d-fees').textContent = cop(r.feesCop);
+    $('d-gmf').textContent = p.gmf ? '− ' + cop(r.gmf) : 'No incluido';
+    $('d-resto').textContent = usdt(r.resto);
+
+    var v = $('verdict');
+    v.className = 'verdict';
+    if (p.inv <= 0 || p.pc <= 0) { v.textContent = 'Escribe cuánto invertiste y a qué precio compraste.'; v.classList.add('warn'); }
+    else if (r.gan > 0) { v.textContent = 'Ganas ' + cop(r.gan) + ' por cada ' + cop(p.inv) + ' invertidos. Mientras vendas a ' + nf(0).format(beR) + ' COP o más, no pierdes.'; }
+    else if (r.gan < 0) { v.textContent = 'Pierdes ' + cop(-r.gan) + '. Necesitas vender a ' + nf(0).format(beR) + ' COP o más para recuperar lo invertido.'; v.classList.add('bad'); }
+    else { v.textContent = 'Quedas en cero: lo que recibes es igual a lo que invertiste.'; v.classList.add('warn'); }
+
+    try {
+      var s = {}; ids.forEach(function (i) { s[i] = $(i).value; }); checks.forEach(function (c) { s[c] = $(c).checked; });
+      localStorage.setItem('calc-usdt-cop-v2', JSON.stringify(s));
+    } catch (e) {}
+  }
+
+  try {
+    var saved = JSON.parse(localStorage.getItem('calc-usdt-cop-v2') || 'null');
+    if (saved) { ids.forEach(function (i) { if (saved[i] !== undefined) $(i).value = saved[i]; }); checks.forEach(function (c) { if (saved[c] !== undefined) $(c).checked = saved[c]; }); }
+  } catch (e) {}
+
+  ids.concat(checks).forEach(function (i) { $(i).addEventListener('input', render); $(i).addEventListener('change', render); });
+  render();
+})();
+</script>
+
+<script>
+// Persecución de precio: compras escalonadas desde el precio en vivo; cada venta = su compra + tu desviación (%).
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var N = function (d) { return new Intl.NumberFormat('es-CO', { minimumFractionDigits: d, maximumFractionDigits: d }); };
+  var DATA = [['2026-09-09', 3100, 3108, 3086, 3094], ['2026-09-10', 3094, 3120, 3088, 3103], ['2026-09-11', 3103, 3107, 3069, 3074],
+    ['2026-09-12', 3074, 3081, 3074, 3075], ['2026-09-13', 3076, 3102, 3075, 3093], ['2026-09-14', 3093, 3147, 3087, 3110],
+    ['2026-09-15', 3110, 3126, 3089, 3116], ['2026-09-16', 3116, 3137, 3104, 3116], ['2026-09-17', 3116, 3160, 3116, 3147],
+    ['2026-09-18', 3147, 3193, 3121, 3144], ['2026-09-19', 3144, 3152, 3120, 3135], ['2026-09-20', 3136, 3165, 3130, 3143],
+    ['2026-09-21', 3143, 3177, 3136, 3149], ['2026-09-22', 3148, 3186, 3148, 3160], ['2026-09-23', 3160, 3285, 3155, 3272],
+    ['2026-09-24', 3272, 3348, 3266, 3341], ['2026-09-25', 3341, 3345, 3283, 3299], ['2026-09-26', 3299, 3300, 3274, 3283],
+    ['2026-09-27', 3283, 3289, 3281, 3283], ['2026-09-28', 3283, 3350, 3282, 3332], ['2026-09-29', 3332, 3341, 3282, 3318],
+    ['2026-09-30', 3318, 3330, 3273, 3286], ['2026-10-01', 3285, 3318, 3268, 3297], ['2026-10-02', 3297, 3304, 3248, 3249],
+    ['2026-10-03', 3249, 3269, 3247, 3249], ['2026-10-04', 3249, 3262, 3248, 3262], ['2026-10-05', 3262, 3279, 3197, 3200],
+    ['2026-10-06', 3200, 3241, 3174, 3218], ['2026-10-07', 3218, 3247, 3210, 3246], ['2026-10-08', 3245, 3250, 3222, 3228],
+    ['2026-10-09', 3228, 3234, 3228, 3233]];
+  var manual = false, live = 0, liveT = '';
+  var col = function (a, i) { return a.map(function (r) { return r[i]; }); };
+  var tr = function (bad, cells) { return '<tr' + (bad ? ' style="color:var(--loss)"' : '') + '>' + cells.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>'; };
+  var tot = function (cells) { return '<tr style="font-weight:600">' + cells.map(function (c) { return '<td style="border-top:1px solid var(--line)">' + c + '</td>'; }).join('') + '</tr>'; };
+  var tbl = function (head, body) { return '<div class="table-scroll"><table><thead><tr>' + head.map(function (h) { return '<th>' + h + '</th>'; }).join('') + '</tr></thead><tbody>' + body + '</tbody></table></div>'; };
+
+  function chartSvg(sel, ref, bp, sp, d) {
+    var W = 720, H = 320, ml = 50, mr = 14, mt = 14, mb = 28, X2 = W - mr;
+    var vals = col(sel, 2).concat(col(sel, 3), bp, sp, [ref]), lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = (hi - lo) * 0.06 || 5;
+    var yMin = Math.floor((lo - pad) / 10) * 10, yMax = Math.ceil((hi + pad) / 10) * 10, span = yMax - yMin;
+    var step = span > 300 ? 100 : span > 150 ? 50 : span > 60 ? 20 : 10;
+    var y = function (v) { return mt + (yMax - v) / span * (H - mt - mb); };
+    var n = sel.length, slot = (W - ml - mr) / n, bw = Math.max(1.5, Math.min(14, slot * 0.6)), every = Math.ceil(n / 8);
+    var hl = function (v, c, da, w) { return '<line x1="' + ml + '" x2="' + X2 + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="' + c + '" stroke-width="' + w + '"' + (da ? ' stroke-dasharray="' + da + '"' : '') + '/>'; };
+    var tx = function (s, x, yy, c, a) { return '<text class="zlab" style="fill:' + c + ';font-size:10px" x="' + x + '" y="' + yy + '"' + (a ? ' text-anchor="' + a + '"' : '') + '>' + s + '</text>'; };
+    var o = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Velas diarias de USDT/COP con las parejas de compra y venta y el precio en vivo">';
+    for (var t = Math.ceil(yMin / step) * step; t <= yMax; t += step) o += '<line class="zg" x1="' + ml + '" x2="' + X2 + '" y1="' + y(t) + '" y2="' + y(t) + '"/><text class="zt" x="' + (ml - 6) + '" y="' + (y(t) + 4) + '" text-anchor="end">' + N(0).format(t) + '</text>';
+    bp.forEach(function (v) { o += hl(v, 'var(--zone-buy)', '4 3', 1); });
+    sp.forEach(function (v) { o += hl(v, 'var(--zone-sell)', '4 3', 1); });
+    sel.forEach(function (r, i) {
+      var cx = ml + slot * (i + 0.5), cls = r[4] >= r[1] ? 'cu' : 'cd', top = y(Math.max(r[1], r[4])), bot = y(Math.min(r[1], r[4]));
+      o += '<line class="' + cls + ' cw" x1="' + cx + '" x2="' + cx + '" y1="' + y(r[2]) + '" y2="' + y(r[3]) + '"/><rect class="' + cls + ' cb" x="' + (cx - bw / 2) + '" y="' + top + '" width="' + bw + '" height="' + Math.max(1.5, bot - top) + '"/>';
+      if (i % every === 0 || i === n - 1) o += '<text class="zt" x="' + cx + '" y="' + (H - 8) + '" text-anchor="middle">' + r[0].slice(8, 10) + '/' + r[0].slice(5, 7) + '</text>';
+    });
+    o += hl(ref, 'var(--accent)', '', 1.6);
+    var m = bp.length;
+    bp.forEach(function (v, k) { o += tx('C' + (k + 1), ml + 4, y(v) - 3, 'var(--zone-buy)'); });
+    sp.forEach(function (v, k) { o += tx('V' + (k + 1), ml + 24, y(v) - 3, 'var(--zone-sell)'); });
+    for (var k = 0; k < m; k++) {
+      var px = m === 1 ? ml + (X2 - ml) / 2 : ml + 40 + (X2 - ml - 80) * k / (m - 1), yb = y(bp[k]), ys = y(sp[k]);
+      o += '<line x1="' + px + '" x2="' + px + '" y1="' + yb + '" y2="' + ys + '" stroke="var(--accent)" stroke-width="1.2"/><circle cx="' + px + '" cy="' + yb + '" r="2.5" fill="var(--zone-buy)"/>';
+      o += '<polygon points="' + (px - 3.5) + ',' + (ys + 7) + ' ' + (px + 3.5) + ',' + (ys + 7) + ' ' + px + ',' + ys + '" fill="var(--zone-sell)"/>' + tx(k + 1, px + 5, (yb + ys) / 2 + 3, 'var(--ink)');
+    }
+    o += tx('Precio ' + N(0).format(ref), X2 - 6, y(ref) - 5, 'var(--accent)', 'end');
+    var sw = function (c) { return '<i style="display:inline-block;width:14px;height:2px;background:' + c + ';vertical-align:middle"></i> '; };
+    return o + '</svg><div class="znote" style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px"><span>' + sw('var(--accent)') + 'Precio en vivo</span><span>' + sw('var(--zone-buy)') + 'Compras (C)</span><span>' + sw('var(--zone-sell)') + 'Ventas (V) = compra + ' + N(3).format(d * 100) + ' %</span></div>';
+  }
+
+  // Prueba histórica: cada día se ponen las mismas órdenes a la misma distancia del cierre anterior que hoy del precio
+  function study(all, ref, bp, sp, H) {
+    return bp.map(function (b, i) {
+      var ok = 0, n = 0;
+      for (var t = 1; t < all.length; t++) {
+        var k = all[t - 1][4] / ref, start = t;
+        if (b < ref) { if (all[t][3] > b * k) { n++; continue; } start = t + 1; }
+        if (start + H - 1 >= all.length) continue;
+        n++;
+        for (var u = start; u < start + H; u++) if (all[u][2] >= sp[i] * k) { ok++; break; }
+      }
+      return n ? ok / n : null;
+    });
+  }
+
+  function render() {
+    var ref = parseFloat($('lp').value) || 0, cap = parseFloat($('ecap').value) || 0, out = $('eout');
+    var n = Math.max(1, Math.min(30, parseInt($('enb').value, 10) || 1)), step = Math.max(1, parseFloat($('est').value) || 1), off = Math.max(0, parseFloat($('eoff').value) || 0);
+    var pc = parseFloat($('pc').value) || 0, pv = parseFloat($('pv').value) || 0, d = pc > 0 ? (pv - pc) / pc : 0;
+    var fb = (parseFloat($('fb').value) || 0) / 100, fs = (parseFloat($('fs').value) || 0) / 100, gmf = $('gmf').checked;
+    $('zamp').value = d > 0 ? '+' + N(3).format(d * 100) : '—';
+    if (ref <= 0 || d <= 0 || cap <= 0) { $('zchart').innerHTML = ''; out.innerHTML = '<div class="chk bad">Necesitas un precio de referencia, dinero a invertir y un precio de venta mayor al de compra (arriba) para armar las parejas.</div>'; return; }
+    var nW = parseInt($('zwin').value, 10), sel = nW > 0 ? DATA.slice(-nW) : DATA, bp = [], i;
+    for (i = 0; i < n; i++) { var v = Math.round(ref - off - i * step); if (v > 0) bp.push(v); }
+    n = bp.length;
+    var sp = bp.map(function (v) { return Math.round(v * (1 + d)); });
+    if (!$('zchart').querySelector('#binance-live-candle-chart')) {
+      $('zchart').innerHTML = window.binanceLiveCandleChartMarkup();
+      window.mountBinanceLiveCandleChart();
+    }
+    window.updateBinanceLiveCandleOrders(bp, sp, ref);
+
+    var per = cap / n, tg = 0, tf = 0, tn = 0, cg = 0, cf = 0, bh = '', sh = '', badB = 0, badS = 0;
+    bp.forEach(function (p, k) {
+      var g = per / p, f = g * fb, q = g - f, c = q * sp[k], fc = c * fs, b1 = g < 2 - 1e-9, b2 = c < 4000;
+      if (b1) badB++; if (b2) badS++;
+      tg += g; tf += f; tn += q; cg += c; cf += fc;
+      bh += tr(b1, [k + 1, N(0).format(p), N(2).format(per), N(5).format(g), N(5).format(f), N(5).format(q)]);
+      sh += tr(b2, [k + 1, N(0).format(sp[k]), N(5).format(q), N(2).format(c), N(2).format(fc), N(2).format(c - fc)]);
+    });
+    bh += tot(['Total', '', N(2).format(cap), N(5).format(tg), N(5).format(tf), N(5).format(tn)]);
+    sh += tot(['Total', '', N(5).format(tn), N(2).format(cg), N(2).format(cf), N(2).format(cg - cf)]);
+    var cn = cg - cf, gm = gmf ? cn * 0.004 : 0, fin = cn - gm, gan = fin - cap, mar = gan / cap * 100;
+    var row = function (t, v, c) { return '<div class="row' + (c || '') + '"><dt>' + t + '</dt><dd' + (c === ' total' ? ' style="color:' + (gan >= 0 ? 'var(--gain)' : 'var(--loss)') + '"' : '') + '>' + v + '</dd></div>'; };
+    var cross = sp.some(function (v) { return bp.indexOf(v) >= 0; });
+    var cb = badB ? 'Alguna compra queda por debajo de 2 USDT: con este dinero te alcanzan hasta ' + Math.floor(cap / (2 * bp[0])) + ' parejas.' : 'Todas las compras cumplen el mínimo de 2 USDT.';
+    var cs = badS ? 'Alguna venta queda por debajo de 4.000 COP: sube el dinero o baja las parejas.' : 'Todas las ventas cumplen el mínimo de 4.000 COP.';
+    if (cross) cs += ' Ojo: una venta cae en el mismo precio de una compra; cambia uno por 1 peso para que Binance no las cruce.';
+    var h = '<p class="znote" style="color:var(--ink);font-weight:600">Compras: de ' + N(0).format(bp[0]) + ' a ' + N(0).format(bp[n - 1]) + '</p>' + tbl(['#', 'Precio', 'COP', 'USDT brutos', 'Comisión (USDT)', 'USDT netos'], bh) + '<div class="chk' + (badB ? ' bad' : '') + '">' + cb + '</div>' +
+      '<p class="znote" style="color:var(--ink);font-weight:600">Ventas (cada compra + ' + N(3).format(d * 100) + ' %): de ' + N(0).format(sp[0]) + ' a ' + N(0).format(sp[n - 1]) + '</p>' + tbl(['#', 'Precio', 'USDT', 'COP brutos', 'Comisión (COP)', 'COP netos'], sh) + '<div class="chk' + (badS || cross ? ' bad' : '') + '">' + cs + '</div>' +
+      '<div style="border:1px solid var(--line);border-radius:8px;padding:4px 14px"><dl class="rows" style="margin:0;border-top:0">' +
+      row('Inviertes', N(2).format(cap) + ' COP') + row('Comisión de compra (ya descontada de tus USDT)', N(2).format(cap * fb) + ' COP') + row('Vendes (COP brutos)', N(2).format(cg) + ' COP') +
+      row('Comisión de venta', '− ' + N(2).format(cf) + ' COP') + row('4x1000', gmf ? '− ' + N(2).format(gm) + ' COP' : 'No incluido') + row('Recibes al final', N(2).format(fin) + ' COP') +
+      row('Ganancia neta', (gan > 0 ? '+ ' : gan < 0 ? '− ' : '') + N(2).format(Math.abs(gan)) + ' COP (' + N(3).format(mar) + ' %)', ' total') + '</dl></div>';
+
+    var H = parseInt($('eh').value, 10) || 3, pr = study(DATA, ref, bp, sp, H), ps = '', ok = pr.filter(function (x) { return x !== null; });
+    var pc2 = function (x) { return x === null ? '—' : N(0).format(x * 100) + ' %'; };
+    bp.forEach(function (p, k) { ps += tr(false, [k + 1, N(0).format(p), N(0).format(sp[k]), pc2(pr[k])]); });
+    ps += tot(['Promedio', '', '', ok.length ? pc2(ok.reduce(function (a, b) { return a + b; }, 0) / ok.length) : '—']);
+    h += '<p class="znote" style="color:var(--ink);font-weight:600">¿Qué tan probable es que cada pareja se cumpla en ' + H + ' d?</p>' + tbl(['#', 'Compra', 'Venta', 'Probabilidad'], ps) +
+      '<div class="chk">Con las velas diarias del historial, cada día se ponen las mismas órdenes a la misma distancia del cierre anterior que tienen hoy del precio. La pareja se cumple si se compra y la venta toca su precio dentro del plazo; una compra por encima del precio se ejecuta de una. Es historial, no una predicción.</div>';
+    out.innerHTML = h;
+  }
+
+  function status() {
+    var t = manual ? 'Precio escrito por ti.' + (live ? ' En vivo ahora: ' + N(2).format(live) + '.' : '') : live ? 'En vivo (Binance): ' + N(2).format(live) + ' · ' + liveT : 'Sin precio en vivo: uso el último cierre del historial.';
+    $('lpst').textContent = t;
+  }
+  function fetchLive() {
+    var urls = ['https://api.binance.com/api/v3/ticker/price?symbol=USDTCOP', 'https://data-api.binance.vision/api/v3/ticker/price?symbol=USDTCOP'], i = 0;
+    (function next() {
+      if (i >= urls.length) { if (!live) $('lpst').textContent = 'No pude traer el precio en vivo (sin internet o bloqueado). Escríbelo a mano.'; return; }
+      fetch(urls[i++]).then(function (r) { return r.json(); }).then(function (j) {
+        var p = parseFloat(j && j.price); if (!isFinite(p) || p <= 0) throw new Error('precio');
+        live = p; liveT = new Date().toLocaleTimeString('es-CO');
+        if (!manual) $('lp').value = p.toFixed(2);
+        status(); render();
+      }).catch(next);
+    })();
+  }
+
+  $('lp').value = DATA[DATA.length - 1][4]; status();
+  $('lp').addEventListener('input', function () { manual = true; status(); render(); });
+  $('lpbtn').addEventListener('click', function () { manual = false; if (live) $('lp').value = live.toFixed(2); status(); render(); fetchLive(); });
+  ['ecap', 'enb', 'eoff', 'est', 'pc', 'pv'].forEach(function (i) { $(i).addEventListener('input', render); });
+  ['zwin', 'eh'].forEach(function (i) { $(i).addEventListener('change', render); });
+  $('gmf').addEventListener('change', render);
+  render(); fetchLive(); setInterval(fetchLive, 20000);
+})();
+</script>
+<script>
+(function () {
+  var priceEl = document.getElementById('binance-usdtcop-price');
+  var updatedEl = document.getElementById('binance-usdtcop-updated');
+  var endpoints = [
+    'https://api.binance.com/api/v3/ticker/price?symbol=USDTCOP',
+    'https://data-api.binance.vision/api/v3/ticker/price?symbol=USDTCOP'
+  ];
+
+  function formatCOP(value) {
+    return '$' + new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(value) + ' COP';
+  }
+
+  function updatePrice() {
+    var index = 0;
+    function tryNext() {
+      if (index >= endpoints.length) {
+        priceEl.textContent = 'sin conexión';
+        return;
+      }
+      fetch(endpoints[index++], { cache: 'no-store' })
+        .then(function (response) {
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return response.json();
+        })
+        .then(function (data) {
+          var price = Number(data && data.price);
+          if (!Number.isFinite(price) || price <= 0) throw new Error('Precio no válido');
+          priceEl.textContent = formatCOP(price);
+          updatedEl.textContent = 'Última actualización: ' + new Intl.DateTimeFormat('es-CO', {
+            dateStyle: 'short', timeStyle: 'medium', timeZone: 'America/Bogota'
+          }).format(new Date());
+        })
+        .catch(tryNext);
+    }
+    tryNext();
+  }
+
+  updatePrice();
+  setInterval(updatePrice, 20000);
+})();
+</script>
+
+</body></html>

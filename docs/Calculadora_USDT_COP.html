@@ -269,6 +269,91 @@ footer { color: var(--muted); font-size: 13px; }
 
 <script>
 (function () {
+  var state = window.__binanceCandleState || { interval: '5m', candles: [], buys: [], sells: [], livePrice: null, generation: 0, busy: false, timer: null, status: '' };
+  window.__binanceCandleState = state;
+  var hosts = ['https://api.binance.com', 'https://data-api.binance.vision'];
+  var number = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
+  var format = function (v) { return number.format(v); };
+  var klinesPath = function (tf, limit) { return '/api/v3/klines?symbol=USDTCOP&interval=' + encodeURIComponent(tf) + '&limit=' + limit; };
+
+  window.binanceLiveCandleChartMarkup = function () {
+    return '<section id="binance-live-candle-chart" aria-label="Velas en vivo USDT/COP" style="width:100%;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:12px">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><strong style="font-size:14px;color:var(--ink)">Velas en vivo · Binance Spot USDT/COP</strong>' +
+      '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted)">Temporalidad <select id="binance-candle-timeframe" aria-label="Temporalidad del gráfico" style="font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px">' +
+      '<option value="1m">1m</option><option value="5m">5m</option><option value="15m">15m</option><option value="1h">1h</option><option value="4h">4h</option><option value="1d">1d</option></select></label></div>' +
+      '<div id="binance-candle-status" role="status" style="font-size:12px;color:var(--muted);margin:0 0 6px">Cargando velas…</div>' +
+      '<div style="width:100%;height:260px;min-width:0"><canvas id="binance-candle-canvas" aria-label="Velas japonesas con precio y órdenes proyectadas" style="display:block;width:100%;height:100%"></canvas></div>' +
+      '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)"><span><i style="display:inline-block;width:15px;border-top:2px solid var(--accent);vertical-align:middle;margin-right:5px"></i>Precio en vivo</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-buy);vertical-align:middle;margin-right:5px"></i>Compras proyectadas</span><span><i style="display:inline-block;width:15px;border-top:2px dashed var(--zone-sell);vertical-align:middle;margin-right:5px"></i>Ventas proyectadas</span></div></section>';
+  };
+
+  function status(text) { state.status = text; var el = document.getElementById('binance-candle-status'); if (el) el.textContent = text; }
+  function fetchBinance(path) {
+    var i = 0;
+    function attempt() {
+      if (i >= hosts.length) return Promise.reject(new Error('Sin conexión'));
+      return fetch(hosts[i++] + path, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).catch(function (e) { return i < hosts.length ? attempt() : Promise.reject(e); });
+    }
+    return attempt();
+  }
+  function parse(row) { return { time: Math.floor(Number(row[0]) / 1000), open: Number(row[1]), high: Number(row[2]), low: Number(row[3]), close: Number(row[4]) }; }
+
+  function draw() {
+    var canvas = document.getElementById('binance-candle-canvas');
+    if (!canvas || !state.candles.length) return;
+    var rect = canvas.getBoundingClientRect(), w = rect.width, h = rect.height;
+    if (w < 100 || h < 80) return;
+    var dpr = Math.max(1, window.devicePixelRatio || 1); canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+    var c = canvas.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var css = getComputedStyle(document.documentElement), color = function (name, fallback) { return css.getPropertyValue(name).trim() || fallback; };
+    var ink = color('--ink', '#14211e'), muted = color('--muted', '#5b6b66'), grid = color('--line', '#d3dbd8'), up = color('--gain', '#0d6b5c'), down = color('--loss', '#b3372b'), buy = color('--zone-buy', '#0d6b5c'), sell = color('--zone-sell', '#9a5f00'), accent = color('--accent', '#0d6b5c');
+    c.clearRect(0, 0, w, h); c.fillStyle = color('--surface', '#fff'); c.fillRect(0, 0, w, h);
+    var left = 8, right = 76, top = 12, bottom = 26, pw = w - left - right, ph = h - top - bottom, vals = [];
+    state.candles.forEach(function (q) { vals.push(q.low, q.high); });
+    state.buys.concat(state.sells).forEach(function (v) { if (Number.isFinite(v)) vals.push(v); });
+    var live = Number.isFinite(state.livePrice) ? state.livePrice : state.candles[state.candles.length - 1].close; vals.push(live);
+    var lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals), pad = Math.max((hi - lo) * 0.08, 2); lo -= pad; hi += pad;
+    var y = function (v) { return top + (hi - v) / (hi - lo) * ph; }, x = function (i) { return left + (i + 0.5) * pw / state.candles.length; };
+    c.font = '10px system-ui,sans-serif'; c.textBaseline = 'middle';
+    for (var t = 0; t <= 4; t++) { var val = hi - (hi - lo) * t / 4, yy = y(val); c.strokeStyle = grid; c.beginPath(); c.moveTo(left, yy); c.lineTo(w - right + 4, yy); c.stroke(); c.fillStyle = muted; c.textAlign = 'left'; c.fillText(format(val), w - right + 9, yy); }
+    function orderLine(price, label, col, xLabel) { var yy = y(price); c.strokeStyle = col; c.lineWidth = 1; c.setLineDash([5, 4]); c.beginPath(); c.moveTo(left, yy); c.lineTo(w - right + 2, yy); c.stroke(); c.setLineDash([]); c.fillStyle = col; c.textAlign = 'left'; c.fillText(label, xLabel, Math.max(top + 5, Math.min(top + ph - 5, yy - 5))); }
+    state.buys.forEach(function (v, i) { orderLine(v, 'C' + (i + 1), buy, left + 3); });
+    state.sells.forEach(function (v, i) { orderLine(v, 'V' + (i + 1), sell, left + 20); });
+    var slot = pw / state.candles.length, body = Math.max(1.2, Math.min(10, slot * 0.62));
+    state.candles.forEach(function (q, i) { var cx = x(i), yo = y(q.open), yc = y(q.close), co = q.close >= q.open ? up : down; c.strokeStyle = co; c.fillStyle = co; c.lineWidth = Math.max(1, Math.min(1.5, body * 0.2)); c.beginPath(); c.moveTo(cx, y(q.high)); c.lineTo(cx, y(q.low)); c.stroke(); c.fillRect(cx - body / 2, Math.min(yo, yc), body, Math.max(1, Math.abs(yc - yo))); });
+    state.buys.forEach(function (price, i) {
+      if (!Number.isFinite(state.sells[i])) return;
+      var px = state.buys.length === 1 ? left + pw / 2 : left + 40 + (pw - 80) * i / (state.buys.length - 1), yb = y(price), ys = y(state.sells[i]);
+      c.strokeStyle = accent; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, yb); c.lineTo(px, ys); c.stroke();
+      c.fillStyle = buy; c.beginPath(); c.arc(px, yb, 2.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = sell; c.beginPath(); c.moveTo(px - 3.5, ys + 6); c.lineTo(px + 3.5, ys + 6); c.lineTo(px, ys); c.closePath(); c.fill();
+      c.fillStyle = ink; c.textAlign = 'left'; c.fillText('' + (i + 1), px + 5, (yb + ys) / 2);
+    });
+    var ly = y(live); c.strokeStyle = accent; c.lineWidth = 1.7; c.setLineDash([3, 3]); c.beginPath(); c.moveTo(left, ly); c.lineTo(w - right + 4, ly); c.stroke(); c.setLineDash([]); c.fillStyle = accent; c.beginPath(); c.arc(w - right + 4, ly, 3, 0, Math.PI * 2); c.fill(); c.textAlign = 'left'; c.font = '600 10px system-ui,sans-serif'; c.fillText(format(live), w - right + 9, Math.max(top + 8, Math.min(top + ph - 8, ly - 8)));
+    c.font = '10px system-ui,sans-serif'; c.fillStyle = muted; c.textAlign = 'center'; var every = Math.max(1, Math.floor(state.candles.length / 5));
+    state.candles.forEach(function (q, i) { if (i % every === 0 || i === state.candles.length - 1) { var dt = new Date(q.time * 1000), label = state.interval === '1d' ? new Intl.DateTimeFormat('es-CO', { day: '2-digit', month: '2-digit', timeZone: 'America/Bogota' }).format(dt) : new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }).format(dt); c.fillText(label, x(i), h - 10); } }); c.fillStyle = ink;
+  }
+
+  async function history() {
+    var token = ++state.generation, tf = state.interval; status('Cargando velas de ' + tf + '…');
+    try { var rows = await fetchBinance(klinesPath(tf, 200)); if (token !== state.generation) return; state.candles = rows.map(parse).filter(function (q) { return Number.isFinite(q.close) && q.close > 0; }).slice(-200); state.livePrice = state.candles.length ? state.candles[state.candles.length - 1].close : null; status('Binance Spot · ' + tf + ' · ' + state.candles.length + ' velas'); draw(); refresh(); }
+    catch (e) { if (token === state.generation) { status('sin conexión'); draw(); } }
+  }
+  async function refresh() {
+    if (!state.candles.length || state.busy) return; state.busy = true; var token = state.generation, tf = state.interval;
+    try { var result = await Promise.all([fetchBinance(klinesPath(tf, 1)), fetchBinance('/api/v3/ticker/price?symbol=USDTCOP').catch(function () { return null; })]); if (token !== state.generation) return;
+      var latest = parse(result[0][result[0].length - 1]), last = state.candles[state.candles.length - 1]; if (latest.time === last.time) state.candles[state.candles.length - 1] = latest; else state.candles = state.candles.concat([latest]).slice(-200);
+      var p = result[1] && Number(result[1].price); state.livePrice = Number.isFinite(p) && p > 0 ? p : latest.close;
+      status('Binance Spot · ' + tf + ' · actualizado ' + new Intl.DateTimeFormat('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'America/Bogota' }).format(new Date())); draw();
+    } catch (e) { if (token === state.generation) { status('sin conexión'); draw(); } } finally { state.busy = false; }
+  }
+  window.mountBinanceLiveCandleChart = function () { var select = document.getElementById('binance-candle-timeframe'); if (!select) return; select.value = state.interval; select.onchange = function () { state.interval = select.value; history(); }; if (state.timer === null) state.timer = setInterval(refresh, 12000); if (state.candles.length) { status(state.status || ('Binance Spot · ' + state.interval)); draw(); } else history(); };
+  window.updateBinanceLiveCandleOrders = function (buys, sells, price) { state.buys = buys.slice(); state.sells = sells.slice(); state.projectedPrice = price; draw(); };
+  window.addEventListener('resize', draw);
+})();
+</script>
+
+<script>
+(function () {
   var $ = function (id) { return document.getElementById(id); };
   var ids = ['inv', 'pc', 'pv', 'dec'];
   var checks = ['trunc', 'gmf'];
@@ -444,7 +529,11 @@ footer { color: var(--muted); font-size: 13px; }
     for (i = 0; i < n; i++) { var v = Math.round(ref - off - i * step); if (v > 0) bp.push(v); }
     n = bp.length;
     var sp = bp.map(function (v) { return Math.round(v * (1 + d)); });
-    $('zchart').innerHTML = chartSvg(sel, ref, bp, sp, d);
+    if (!$('zchart').querySelector('#binance-live-candle-chart')) {
+      $('zchart').innerHTML = window.binanceLiveCandleChartMarkup();
+      window.mountBinanceLiveCandleChart();
+    }
+    window.updateBinanceLiveCandleOrders(bp, sp, ref);
 
     var per = cap / n, tg = 0, tf = 0, tn = 0, cg = 0, cf = 0, bh = '', sh = '', badB = 0, badS = 0;
     bp.forEach(function (p, k) {
@@ -546,4 +635,5 @@ footer { color: var(--muted); font-size: 13px; }
   setInterval(updatePrice, 20000);
 })();
 </script>
+
 </body></html>
