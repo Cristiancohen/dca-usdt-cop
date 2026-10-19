@@ -12,13 +12,18 @@
 @media(prefers-color-scheme:dark){:root{color-scheme:dark;--bg:#0f1a17;--surface:#16241f;--ink:#e6efec;--muted:#94a8a1;--line:#2a3d37;--accent:#4fc3ac;--soft:#1b3a33;--bad:#f08a7e}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--font);padding:26px 16px 44px}.wrap{max-width:960px;margin:auto;display:grid;gap:16px}header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}h1{font-size:clamp(25px,5vw,34px);letter-spacing:-.03em;line-height:1.15;margin:0}header p{color:var(--muted);margin:7px 0 0}.refresh{font:12px var(--mono);color:var(--muted);padding-top:6px}.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:17px;min-width:0}.topline{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.eyebrow{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}.pill{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:5px 10px;font-size:12px;font-weight:600;background:var(--soft);color:var(--accent)}.pill.error{color:var(--bad);background:transparent;border:1px solid var(--bad)}.dot{width:7px;height:7px;background:currentColor;border-radius:50%}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}.datum{border-top:1px solid var(--line);padding-top:10px;min-width:0}.datum small{display:block;color:var(--muted);font-size:12px;margin-bottom:4px}.datum strong{font:14px/1.5 var(--mono);overflow-wrap:anywhere}.datum.wide{grid-column:1/-1}.empty{padding:23px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:8px;margin-top:14px}.section-title{margin:0 0 12px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}.request{border:1px solid var(--line);border-radius:8px;margin-top:10px;overflow:hidden}.request summary{cursor:pointer;padding:10px 12px;font:12px var(--mono);background:var(--bg);overflow-wrap:anywhere}.request-body{padding:12px}.request-body p{margin:0 0 8px;color:var(--muted);font-size:12px}.raw{margin:0;max-height:420px;overflow:auto;background:var(--bg);border-radius:6px;border:1px solid var(--line);padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.55 var(--mono)}.history{display:grid;gap:10px}.history-item{border:1px solid var(--line);border-radius:8px;padding:12px;display:grid;gap:6px}.history-head{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.history-item time,.history-meta{font:12px var(--mono);color:var(--muted)}.history-item p{margin:0;font-size:13px}.error-text{color:var(--bad);overflow-wrap:anywhere}a{color:var(--accent)}footer{font-size:12px;color:var(--muted);padding:0 2px}@media(max-width:620px){.grid{grid-template-columns:1fr 1fr}.datum.wide{grid-column:1/-1}.card{padding:14px}}@media(max-width:380px){.grid{grid-template-columns:1fr}}
 </style>
+<style>
+.header-actions{display:grid;justify-items:end;gap:5px}.panel-link{font-size:13px;font-weight:600}.format-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}.format-table th,.format-table td{text-align:left;vertical-align:top;border-bottom:1px solid var(--line);padding:9px 7px}.format-table th{color:var(--muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase}.format-callout{border-left:3px solid var(--accent);padding:10px 12px;background:var(--soft);border-radius:0 6px 6px 0;margin:12px 0}.format-ok{color:var(--accent);font-weight:700}.format-fail{color:var(--bad);font-weight:700}.format-meta{font-size:12px;color:var(--muted)}.format-wrap{overflow-x:auto}
+@media(max-width:620px){.header-actions{justify-items:start}}
+</style>
 </head>
 <body>
 <main class="wrap">
-<header><div><h1>Monitor del bot</h1><p>Órdenes manuales USDTCOP · respuestas recibidas de Binance</p></div><div class="refresh" id="refresh">Cargando bitácora…</div></header>
+<header><div><h1>Monitor del bot</h1><p>Órdenes manuales USDTCOP · respuestas recibidas de Binance</p></div><div class="header-actions"><a class="panel-link" href="Panel_Manual.html">Panel manual de envíos</a><div class="refresh" id="refresh">Cargando bitácora…</div></div></header>
 <section class="card" aria-labelledby="latest-heading"><div class="topline"><h2 class="eyebrow" id="latest-heading">Última ejecución</h2><span id="latest-status" class="pill"><span class="dot"></span>Consultando</span></div><div id="latest"><div class="empty">Cargando la bitácora pública…</div></div></section>
 <section class="card"><h2 class="section-title">Histórico reciente</h2><div id="history" class="history"><div class="empty">Cargando…</div></div></section>
-<footer>Actualización automática cada 20 segundos. La vista consulta únicamente el archivo público de bitácora del repositorio; no contiene claves API ni tokens.</footer>
+<section class="card" aria-labelledby="format-heading"><h2 class="section-title" id="format-heading">Formato y mínimos según Binance</h2><div id="format-content"><div class="empty">Cargando el exchangeInfo verificado…</div></div></section>
+<footer>Actualización automática del monitor cada 20 segundos. La vista consulta bitácoras públicas y el exchangeInfo público; no contiene claves API ni tokens.</footer>
 </main>
 <script>
 (() => {
@@ -105,7 +110,56 @@
       if(!latest.textContent.includes('No se pudo')) latest.append(el('p',err.message,'error-text'));
     }
   }
-  load(); setInterval(load,20000);
+  const formatFeed='https://api.github.com/repos/Cristiancohen/dca-usdt-cop/contents/monitor/formato.json?ref=main';
+  const formatContent=document.getElementById('format-content');
+  const fmtNumber=value=>new Intl.NumberFormat('es-CO',{maximumFractionDigits:8}).format(Number(value));
+  function decodeFileContent(file){const bytes=Uint8Array.from(atob((file.content||'').replace(/\s/g,'')),c=>c.charCodeAt(0));return JSON.parse(new TextDecoder().decode(bytes));}
+  function appendDatum(grid,label,value,wide=false){const box=el('div',undefined,wide?'datum wide':'datum');box.append(el('small',label),el('strong',String(value)));grid.append(box);}
+  async function loadFormat(){
+    try{
+      const response=await fetch(formatFeed,{headers:{'Accept':'application/vnd.github+json'},cache:'no-store'});
+      if(!response.ok)throw new Error(`HTTP ${response.status} al leer monitor/formato.json`);
+      const report=decodeFileContent(await response.json());
+      const symbol=report.symbol||{},filters=report.filters||{},price=filters.PRICE_FILTER||{},lot=filters.LOT_SIZE||{},notional=filters.NOTIONAL_or_MIN_NOTIONAL||{},test=report.test_order_assessment||{},order=report.order_format||{};
+      formatContent.replaceChildren();
+      const meta=el('p',`Fuente: lectura pública de exchangeInfo · ${report.generated_at||'fecha no indicada'}`,'format-meta');formatContent.append(meta);
+      const grid=el('div',undefined,'grid');
+      appendDatum(grid,'Símbolo spot',`${symbol.symbol||'—'} · ${symbol.baseAsset||'—'}/${symbol.quoteAsset||'—'}`);
+      appendDatum(grid,'Estado',`${symbol.status||'—'} · Spot ${symbol.isSpotTradingAllowed?'habilitado':'no confirmado'}`);
+      appendDatum(grid,'Endpoint de orden',order.endpoint||'POST /api/v3/order');
+      appendDatum(grid,'Mínimo NOTIONAL de compra',`${fmtNumber(filters.minimum_nominal_buy_cop)} COP`);
+      appendDatum(grid,'Mínimo NOTIONAL de venta',`${fmtNumber(filters.minimum_nominal_sell_cop)} COP`);
+      appendDatum(grid,'Mínimo efectivo a 3100 COP',`${fmtNumber(test.min_qty_at_test_price_USDT_for_each_side)} USDT · ${fmtNumber(test.effective_min_notional_at_test_price_COP_for_each_side)} COP (buy y sell)`,true);
+      formatContent.append(grid);
+      const tableWrap=el('div');tableWrap.className='format-wrap';
+      const table=el('table');table.className='format-table';
+      const thead=el('thead'),hr=el('tr');['Filtro','Mínimo','Máximo','Incremento / regla'].forEach(x=>hr.append(el('th',x)));thead.append(hr);table.append(thead);
+      const tbody=el('tbody');
+      [[`PRICE_FILTER · precio`,price.minPrice,price.maxPrice,`tickSize ${price.tickSize}`],[`LOT_SIZE · cantidad`,lot.minQty,lot.maxQty,`stepSize ${lot.stepSize}`],[`NOTIONAL · ambos lados`,notional.minNotional,notional.maxNotional,`minNotional ${notional.minNotional} COP`]].forEach(row=>{const tr=el('tr');row.forEach(value=>tr.append(el('td',String(value??'—'))));tbody.append(tr);});
+      table.append(tbody);tableWrap.append(table);formatContent.append(tableWrap);
+      const passed=test.overall_filters_pass===true;
+      const verdict=el('p',passed?'La prueba buy 3100 COP × 2 USDT cumple los filtros de precio, cantidad y nominal.':'La prueba indicada no cumple uno o más filtros; ver detalle abajo.',passed?'format-callout format-ok':'format-callout format-fail');
+      verdict.append(document.createTextNode(` Nominal: ${fmtNumber(test.interpreted_order?.notional_COP)} COP; el filtro NOTIONAL exige ${fmtNumber(notional.minNotional)} COP. `));
+      verdict.append(el('span',test.reason||''));formatContent.append(verdict);
+      const fmtDetails=el('details');fmtDetails.className='request';fmtDetails.open=false;fmtDetails.append(el('summary','Formato exacto que envía el bot y firma requerida'));
+      const body=el('div');body.className='request-body';
+      body.append(el('pre',`${order.endpoint||'POST /api/v3/order'}\nParámetros requeridos: ${(order.required_parameters||[]).join(', ')}\nFirma: ${order.signature||'HMAC-SHA256 con BINANCE_API_SECRET'}\nCampos adicionales que manda el bot: ${(order.bot_additional_parameters||[]).join(', ')}\nSemántica: ${order.bot_quantity_semantics||'quantity representa el activo base.'}`,'raw'));
+      fmtDetails.append(body);formatContent.append(fmtDetails);
+      const diag=report.public_read_audit||{};
+      const apiStatus=diag.api_binance_exchangeInfo||{},vision=diag.exchangeInfo_USDTCOP||{};
+      const note=el('p',`Lectura real: data-api.binance.vision HTTP ${vision.http_status??'—'}; api.binance.com HTTP ${apiStatus.http_status??'—'}. No se necesitó proxy para la consulta de solo lectura.`,'format-meta');formatContent.append(note);
+      const rawDetails=el('details');rawDetails.className='request';rawDetails.append(el('summary','Respuestas crudas de diagnóstico y exchangeInfo'));
+      const rawBody=el('div');rawBody.className='request-body';
+      rawBody.append(el('p','Respuesta cruda de api.binance.com (ping/exchangeInfo):'));
+      rawBody.append(el('pre',apiStatus.raw_response||apiStatus.error||'Sin respuesta guardada.','raw'));
+      rawBody.append(el('p','exchangeInfo crudo de data-api.binance.vision:'));
+      rawBody.append(el('pre',JSON.stringify(report.raw_exchangeInfo||{},null,2),'raw'));
+      const invalid=diag.exchangeInfo_USDCOP;
+      if(invalid){rawBody.append(el('p','Comprobación del símbolo alternativo USDCOP:'));rawBody.append(el('pre',invalid.raw_response||JSON.stringify(invalid.response_json||{}),'raw'));}
+      rawDetails.append(rawBody);formatContent.append(rawDetails);
+    }catch(error){formatContent.replaceChildren(el('p',`No se pudo leer el informe público: ${error.message}`,'error-text'));}
+  }
+  load(); setInterval(load,20000); loadFormat();
 })();
 </script>
 </body>
